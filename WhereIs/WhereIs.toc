@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: WhereIs
+## Notes: Escribe un objeto. Marca dónde comprarlo, farmearlo o desencantarlo.
+## Notes-esES: Escribe un objeto. Marca dónde comprarlo, farmearlo o desencantarlo.
+## Notes-esMX: Escribe un objeto. Marca dónde comprarlo, farmearlo o desencantarlo.
+## Author: WhereIs
+## Version: 1.5.0
+## SavedVariables: DondeComprarDB
+## IconTexture: Interface\Icons\INV_Misc_Spyglass_02
+## AddonCompartmentFunc: WhereIs_OnClick
+
+Data.lua
+Chance.lua
+Enchant.lua
+NodesDB.lua
+DondeComprar.lua

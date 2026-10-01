@@ -1,0 +1,14 @@
+## Interface: 16001
+## Title: Subastas Forever
+## Notes: Vigila precios en la casa de subastas y compra si bajan de tu máximo, para revenderlos.
+## Author: Subastas Forever
+## Version: 1.1.22
+## SavedVariables: SubastasForeverDB
+## IconTexture: Interface\Icons\INV_Misc_Coin_01
+## AddonCompartmentFunc: SubastasForever_OnClick
+
+Core.lua
+Scan.lua
+Trade.lua
+Bags.lua
+UI.lua
