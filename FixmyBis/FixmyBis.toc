@@ -1,0 +1,12 @@
+## Interface: 16001
+## Title: FixmyBis
+## Notes: Lista BiS de tu clase y facción. Pasa el ratón para ver las estadísticas.
+## Notes-esES: Lista BiS de tu clase y facción. Pasa el ratón para ver las estadísticas.
+## Notes-esMX: Lista BiS de tu clase y facción. Pasa el ratón para ver las estadísticas.
+## Author: FixmyBis
+## Version: 0.2.1
+## SavedVariables: FixmyBisDB
+## IconTexture: Interface\Icons\INV_Chest_Chain
+
+BisDB.lua
+FixmyBis.lua
