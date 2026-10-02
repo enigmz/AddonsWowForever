@@ -46,6 +46,36 @@ local SPEC_NAME = {
 	pvp = "JcJ",
 }
 
+local CLASS_ICON = "Interface\\TargetingFrame\\UI-Classes-Circles"
+local CLASS_COORDS = {
+	warrior = { 0, 0.25, 0, 0.25 },
+	mage = { 0.25, 0.49609375, 0, 0.25 },
+	rogue = { 0.49609375, 0.7421875, 0, 0.25 },
+	druid = { 0.7421875, 0.98828125, 0, 0.25 },
+	hunter = { 0, 0.25, 0.25, 0.5 },
+	shaman = { 0.25, 0.49609375, 0.25, 0.5 },
+	priest = { 0.49609375, 0.7421875, 0.25, 0.5 },
+	warlock = { 0.7421875, 0.98828125, 0.25, 0.5 },
+	paladin = { 0, 0.25, 0.5, 0.75 },
+}
+
+local CLASS_ORDER = {
+	"warrior", "paladin", "hunter", "rogue", "priest",
+	"shaman", "mage", "warlock", "druid",
+}
+
+local CLASS_NAME = {
+	warrior = "Guerrero",
+	paladin = "Paladín",
+	hunter = "Cazador",
+	rogue = "Pícaro",
+	priest = "Sacerdote",
+	shaman = "Chamán",
+	mage = "Mago",
+	warlock = "Brujo",
+	druid = "Druida",
+}
+
 -- Orden de las pestañas de talentos en clásico. Armas y furia comparten la lista JcE.
 local TALENT_SPEC = {
 	shaman = { "elemental", "enhancement", "restoration" },
@@ -60,9 +90,11 @@ local openSlots = {}
 local frame, tab
 local scroll, content
 local infoText, emptyText
-local levelButtons, specButtons = {}, {}
-local rows, headers = {}, {}
-local usedRows, usedHeaders = 0, 0
+local levelDrop
+local specButtons = {}
+local classButtons = {}
+local rows, headers, notes = {}, {}, {}
+local usedRows, usedHeaders, usedNotes = 0, 0, 0
 
 local function ClassToken()
 	local _, token = UnitClass("player")
@@ -152,14 +184,17 @@ local function Resolve()
 end
 
 local function EnsureState()
-	state.class = ClassToken()
 	state.faction = FactionToken()
 	if not state.ready then
 		state.ready = true
+		state.class = ClassToken()
 		local level = UnitLevel("player") or 30
 		state.level = level <= 20 and 20 or 30
 		state.mode = "pve"
 		state.spec = GuessSpec(state.class)
+	end
+	if not state.class then
+		state.class = ClassToken()
 	end
 	Resolve()
 end
@@ -216,6 +251,45 @@ local function WantDress()
 	return false
 end
 
+local function ChatBox()
+	if ChatEdit_GetActiveWindow then
+		local box = ChatEdit_GetActiveWindow()
+		if box and box.IsShown and box:IsShown() then return box end
+	end
+	if ChatFrameUtil and ChatFrameUtil.GetActiveWindow then
+		local box = ChatFrameUtil.GetActiveWindow()
+		if box and box.IsShown and box:IsShown() then return box end
+	end
+	if ChatFrame1EditBox and ChatFrame1EditBox.IsShown and ChatFrame1EditBox:IsShown() then
+		return ChatFrame1EditBox
+	end
+end
+
+local function PasteItem(itemID)
+	if not itemID then return false end
+	local shift = (IsModifiedClick and IsModifiedClick("CHATLINK")) or (IsShiftKeyDown and IsShiftKeyDown())
+	if not shift then return false end
+	local box = ChatBox()
+	if not box then return false end
+	local link = ItemLink(itemID)
+	if link and not link:find("|H", 1, true) then
+		local name
+		if C_Item and C_Item.GetItemInfo then
+			name = C_Item.GetItemInfo(itemID)
+		elseif GetItemInfo then
+			name = GetItemInfo(itemID)
+		end
+		link = "|cffffffff|Hitem:" .. itemID .. "::::::::|h[" .. (name or "objeto") .. "]|h|r"
+	end
+	if ChatEdit_InsertLink and ChatEdit_InsertLink(link) then return true end
+	if ChatFrameUtil and ChatFrameUtil.InsertLink and ChatFrameUtil.InsertLink(link) then return true end
+	if box.Insert then
+		box:Insert(link)
+		return true
+	end
+	return false
+end
+
 local function DressItem(itemID)
 	if not itemID then return end
 	if C_AddOns and C_AddOns.LoadAddOn then
@@ -233,7 +307,7 @@ local function DressItem(itemID)
 	end
 end
 
-local function ShowItemTip(owner, itemID, source, best)
+local function ShowItemTip(owner, itemID, source, best, extra)
 	GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
 	if GameTooltip.SetItemByID then
 		GameTooltip:SetItemByID(itemID)
@@ -246,8 +320,10 @@ local function ShowItemTip(owner, itemID, source, best)
 	end
 	if best then
 		GameTooltip:AddLine("Primera pieza de este hueco para tu facción.", 1, 0.82, 0, true)
+	elseif extra then
+		GameTooltip:AddLine("Alternativa de mazmorra o misión. Va detrás de la lista principal.", 0.75, 0.75, 0.75, true)
 	end
-	GameTooltip:AddLine("Ctrl-clic: verlo en el probador.", 0.6, 0.8, 1, true)
+	GameTooltip:AddLine("Ctrl-clic: verlo en el probador. Mayús-clic con el chat abierto: enlazarlo.", 0.6, 0.8, 1, true)
 	GameTooltip:Show()
 end
 
@@ -275,10 +351,11 @@ local function AcquireRow()
 	row.mark:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -4)
 	row.mark:SetText("BiS")
 	row:SetScript("OnEnter", function(self)
-		ShowItemTip(self, self.itemID, self.sourceText, self.isBest)
+		ShowItemTip(self, self.itemID, self.sourceText, self.isBest, self.isExtra)
 	end)
 	row:SetScript("OnLeave", GameTooltip_Hide)
 	row:SetScript("OnClick", function(self)
+		if PasteItem(self.itemID) then return end
 		if WantDress() then
 			DressItem(self.itemID)
 		end
@@ -338,6 +415,7 @@ local function AcquireHeader()
 	header.bestName:SetWordWrap(false)
 	header.title:SetPoint("RIGHT", header.bestName, "LEFT", -8, 0)
 	header:SetScript("OnClick", function(self)
+		if self.itemID and PasteItem(self.itemID) then return end
 		if self.itemID and WantDress() then
 			DressItem(self.itemID)
 			return
@@ -359,9 +437,31 @@ local function AcquireHeader()
 	return header
 end
 
+local function AcquireNote()
+	usedNotes = usedNotes + 1
+	local note = notes[usedNotes]
+	if note then return note end
+	note = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	note:SetJustifyH("LEFT")
+	notes[usedNotes] = note
+	return note
+end
+
 local function HideUnused()
 	for index = usedRows + 1, #rows do rows[index]:Hide() end
 	for index = usedHeaders + 1, #headers do headers[index]:Hide() end
+	for index = usedNotes + 1, #notes do notes[index]:Hide() end
+end
+
+local function PaintClassButton(button, selected)
+	if not button then return end
+	if selected then
+		button.icon:SetVertexColor(1, 1, 1)
+		button.ring:Show()
+	else
+		button.icon:SetVertexColor(0.45, 0.45, 0.45)
+		button.ring:Hide()
+	end
 end
 
 local function PaintButton(button, selected)
@@ -381,45 +481,143 @@ local function ListLabel(list)
 	return spec
 end
 
-local function PlaceFilters()
-	local lists = ListsFor(state.level, state.class)
-	local x = 16
-	for _, button in ipairs(levelButtons) do
-		PaintButton(button, button.level == state.level)
-		button:ClearAllPoints()
-			button:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -92)
-		x = x + button:GetWidth() + 6
+local function FlipRegion(region)
+	if not region or not region.GetTexCoord or not region.SetTexCoord then return end
+	if not region.fixmyBisBase then
+		local coords = { region:GetTexCoord() }
+		if #coords < 4 then return end
+		region.fixmyBisBase = coords
 	end
+	local coords = region.fixmyBisBase
+	if #coords >= 8 then
+		region:SetTexCoord(coords[3], coords[4], coords[1], coords[2], coords[7], coords[8], coords[5], coords[6])
+	else
+		region:SetTexCoord(coords[1], coords[2], coords[4], coords[3])
+	end
+end
 
-	local shown = 0
-	for index, list in ipairs(lists) do
-		local button = specButtons[index]
-		if button then
-			button.label = ListLabel(list)
-			button.spec = list.spec
-			button.mode = list.mode
-			local selected = list.mode == state.mode and ((not state.spec and not IsRealSpec(list.spec)) or list.spec == state.spec)
-			PaintButton(button, selected)
-			local col = (index - 1) % 4
-			local row = math.floor((index - 1) / 4)
-			button:ClearAllPoints()
-			button:SetPoint("TOPLEFT", frame, "TOPLEFT", 16 + col * 116, -118 - row * 24)
-			button:Show()
-			shown = index
+local function FlipTab(button)
+	if not button or not button.GetName then return end
+	local name = button:GetName()
+	for _, part in ipairs({
+		"Left", "Middle", "Right",
+		"LeftDisabled", "MiddleDisabled", "RightDisabled",
+		"LeftActive", "MiddleActive", "RightActive",
+	}) do
+		FlipRegion(button[part])
+		if name then FlipRegion(_G[name .. part]) end
+	end
+	if button.GetHighlightTexture then
+		FlipRegion(button:GetHighlightTexture())
+	end
+	if button.GetRegions then
+		for _, region in ipairs({ button:GetRegions() }) do
+			if region.GetObjectType and region:GetObjectType() == "Texture" then
+				FlipRegion(region)
+			end
 		end
+	end
+end
+
+local function PlaceTabText(button, width)
+	local fontString = button.GetFontString and button:GetFontString()
+	if not fontString then return end
+	fontString:SetWordWrap(false)
+	fontString:SetJustifyH("CENTER")
+	fontString:SetJustifyV("MIDDLE")
+	fontString:ClearAllPoints()
+	fontString:SetPoint("CENTER", button, "CENTER", 0, -6)
+	fontString:SetWidth(math.max(20, (width or button:GetWidth()) - 28))
+end
+
+local function SizeSpecTab(button, width)
+	button:SetWidth(width)
+	if PanelTemplates_TabResize then
+		pcall(PanelTemplates_TabResize, button, 0, width)
+	end
+	FlipTab(button)
+	PlaceTabText(button, width)
+end
+
+local function PlaceFilters()
+	for _, button in ipairs(classButtons) do
+		PaintClassButton(button, button.classToken == state.class)
+	end
+	if levelDrop and levelDrop.kind == "menu" and UIDropDownMenu_SetText then
+		pcall(UIDropDownMenu_SetText, levelDrop, "Nivel " .. state.level)
+	elseif levelDrop then
+		levelDrop:SetText("Nivel " .. state.level)
+	end
+	local lists = ListsFor(state.level, state.class)
+	local shown = math.min(#lists, #specButtons)
+	local gap = -14
+	local widths, span = {}, 0
+	for index = 1, shown do
+		local button = specButtons[index]
+		local label = ListLabel(lists[index])
+		button:SetText(label)
+		local textWidth = (button.GetTextWidth and button:GetTextWidth()) or 0
+		if textWidth < 8 then
+			local chars = strlenutf8 and strlenutf8(label) or #label
+			textWidth = chars * 7
+		end
+		widths[index] = math.max(78, textWidth + 36)
+		span = span + widths[index]
+	end
+	if shown > 1 then
+		span = span + gap * (shown - 1)
+	end
+	local available = frame:GetWidth() - 32
+	if span > available and span > 0 then
+		local scale = available / span
+		span = 0
+		for index = 1, shown do
+			widths[index] = math.max(64, widths[index] * scale)
+			span = span + widths[index]
+		end
+		if shown > 1 then
+			span = span + gap * (shown - 1)
+		end
+		if span > available and shown > 1 then
+			gap = gap - ((span - available) / (shown - 1))
+		end
+	end
+	for index = 1, shown do
+		local list = lists[index]
+		local button = specButtons[index]
+		button.label = ListLabel(list)
+		button.spec = list.spec
+		button.mode = list.mode
+		SizeSpecTab(button, widths[index])
+		local selected = list.mode == state.mode and ((not state.spec and not IsRealSpec(list.spec)) or list.spec == state.spec)
+		if selected and PanelTemplates_SelectTab then
+			pcall(PanelTemplates_SelectTab, button)
+		elseif PanelTemplates_DeselectTab then
+			pcall(PanelTemplates_DeselectTab, button)
+		else
+			PaintButton(button, selected)
+		end
+		FlipTab(button)
+		PlaceTabText(button, widths[index])
+		button:SetFrameLevel(frame:GetFrameLevel() + (selected and 6 or 3))
+		button:ClearAllPoints()
+		if index == 1 then
+			button:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -170)
+		else
+			button:SetPoint("LEFT", specButtons[index - 1], "RIGHT", gap, 0)
+		end
+		button:Show()
 	end
 	for index = shown + 1, #specButtons do
 		specButtons[index]:Hide()
 	end
-	if shown == 0 then return 0 end
-	return math.ceil(shown / 4)
 end
 
 function FillList()
-	usedRows, usedHeaders = 0, 0
+	usedRows, usedHeaders, usedNotes = 0, 0, 0
 	local list = CurrentList()
 	local width = scroll:GetWidth()
-	if not width or width < 40 then width = 430 end
+	if not width or width < 40 then width = 760 end
 	content:SetWidth(width)
 	if not list then
 		emptyText:Show()
@@ -480,7 +678,18 @@ function FillList()
 				header:Show()
 				y = y - 30
 				if opened then
+				local noted = false
 				for _, item in ipairs(visible) do
+					if item.extra and not noted then
+						local note = AcquireNote()
+						note:ClearAllPoints()
+						note:SetPoint("TOPLEFT", content, "TOPLEFT", 18, y)
+						note:SetWidth(width - 22)
+						note:SetText("Otras piezas de mazmorra y misión")
+						note:Show()
+						y = y - 16
+						noted = true
+					end
 					local row = AcquireRow()
 					row:SetWidth(width - 22)
 					row:ClearAllPoints()
@@ -488,6 +697,7 @@ function FillList()
 					row.itemID = item.id
 					row.sourceText = item.source or ""
 					row.isBest = IsBest(list, slot, item.id)
+					row.isExtra = item.extra and true or false
 					row.source:SetText(row.sourceText)
 					row.mark:SetShown(row.isBest)
 					local name, texture, quality = ItemVisual(item.id)
@@ -515,7 +725,7 @@ function FillList()
 end
 
 local function WhoText()
-	local className = UnitClass("player") or "Personaje"
+	local className = CLASS_NAME[state.class] or UnitClass("player") or "Personaje"
 	local _, factionName = UnitFactionGroup("player")
 	if not factionName or factionName == "" then
 		factionName = state.faction == "horde" and "Horda" or state.faction == "alliance" and "Alianza" or "Sin facción"
@@ -531,31 +741,22 @@ local function Refresh()
 	if not frame then return end
 	EnsureState()
 	infoText:SetText(WhoText())
-	local specRows = PlaceFilters()
-	scroll:ClearAllPoints()
-	scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -126 - specRows * 24)
-	scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -32, 48)
+	PlaceFilters()
 	FillList()
 end
 
 local function Choose(kind, value)
 	if kind == "level" then state.level = value end
+	if kind == "class" and state.class ~= value then
+		state.class = value
+		state.spec = value == ClassToken() and GuessSpec(value) or nil
+		state.mode = "pve"
+	end
 	if kind == "spec" then state.spec = value.spec state.mode = value.mode end
 	if kind == "mode" then state.mode = value end
 	state.ready = true
 	if scroll then scroll:SetVerticalScroll(0) end
 	Refresh()
-end
-
-local function MakeChoice(parent, label, width, kind, value)
-	local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-	button:SetSize(width, 22)
-	button.label = label
-	button:SetText(label)
-	button:SetScript("OnClick", function()
-		Choose(kind, value)
-	end)
-	return button
 end
 
 local function SyncTab()
@@ -593,12 +794,19 @@ local function BuildFrame()
 			insets = { left = 8, right = 8, top = 8, bottom = 8 },
 		})
 	end
-	frame:SetSize(480, 560)
+	frame:SetSize(840, 680)
 	frame:SetPoint("CENTER")
 	frame:SetFrameStrata("HIGH")
 	frame:SetToplevel(true)
 	frame:SetClampedToScreen(true)
 	frame:SetMovable(true)
+	frame:SetResizable(true)
+	if frame.SetResizeBounds then
+		frame:SetResizeBounds(560, 480, 1800, 1400)
+	else
+		frame:SetMinResize(560, 480)
+		frame:SetMaxResize(1800, 1400)
+	end
 	frame:EnableMouse(true)
 	frame:Hide()
 	tinsert(UISpecialFrames, "FixmyBisFrame")
@@ -649,17 +857,124 @@ local function BuildFrame()
 	drag:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
 
 	infoText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	infoText:SetPoint("TOPLEFT", 24, -68)
-	infoText:SetPoint("RIGHT", frame, "RIGHT", -24, 0)
+	infoText:SetPoint("TOPLEFT", 24, -140)
+	infoText:SetPoint("RIGHT", frame, "RIGHT", -190, 0)
 	infoText:SetJustifyH("LEFT")
 	infoText:SetWordWrap(false)
 
-	levelButtons[1] = MakeChoice(frame, "Nivel 20", 78, "level", 20)
-	levelButtons[1].level = 20
-	levelButtons[2] = MakeChoice(frame, "Nivel 30", 78, "level", 30)
-	levelButtons[2].level = 30
+	local dropOk, drop = pcall(CreateFrame, "Frame", "FixmyBisLevelDrop", frame, "UIDropDownMenuTemplate")
+	local menuReady = false
+	if dropOk and drop and UIDropDownMenu_Initialize and UIDropDownMenu_CreateInfo then
+		levelDrop = drop
+		levelDrop.kind = "menu"
+		menuReady = pcall(function()
+			UIDropDownMenu_SetWidth(levelDrop, 100)
+			UIDropDownMenu_Initialize(levelDrop, function()
+				local levels, seen = {}, {}
+				if FixmyBisData and FixmyBisData.lists then
+					for _, list in ipairs(FixmyBisData.lists) do
+						if list.class == state.class and not seen[list.level] then
+							seen[list.level] = true
+							levels[#levels + 1] = list.level
+						end
+					end
+				end
+				if #levels == 0 then
+					levels[1], levels[2] = 20, 30
+				end
+				table.sort(levels)
+				for _, value in ipairs(levels) do
+					local info = UIDropDownMenu_CreateInfo()
+					info.text = "Nivel " .. value
+					info.arg1 = value
+					info.checked = state.level == value
+					info.func = function(_, picked)
+						Choose("level", picked)
+					end
+					UIDropDownMenu_AddButton(info)
+				end
+			end)
+			UIDropDownMenu_SetText(levelDrop, "Nivel " .. (state.level or 30))
+			levelDrop:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -130)
+		end)
+	end
+	if not menuReady then
+		if drop and drop.Hide then drop:Hide() end
+		levelDrop = CreateFrame("Button", "FixmyBisLevelButton", frame, "UIPanelButtonTemplate")
+		levelDrop.kind = "button"
+		levelDrop:SetSize(110, 22)
+		levelDrop:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -16, -136)
+		levelDrop:SetText("Nivel " .. (state.level or 30))
+		levelDrop:SetScript("OnClick", function()
+			local levels, seen = {}, {}
+			if FixmyBisData and FixmyBisData.lists then
+				for _, list in ipairs(FixmyBisData.lists) do
+					if list.class == state.class and not seen[list.level] then
+						seen[list.level] = true
+						levels[#levels + 1] = list.level
+					end
+				end
+			end
+			if #levels == 0 then
+				levels[1], levels[2] = 20, 30
+			end
+			table.sort(levels)
+			local nextLevel = levels[1]
+			for index, value in ipairs(levels) do
+				if value == state.level then
+					nextLevel = levels[index + 1] or levels[1]
+				end
+			end
+			Choose("level", nextLevel)
+		end)
+	end
+	local classGap = 6
+	local classSize = 28
+	for index, token in ipairs(CLASS_ORDER) do
+		local button = CreateFrame("Button", nil, frame)
+		button:SetSize(classSize, classSize)
+		button.classToken = token
+		button.label = CLASS_NAME[token] or token
+		local coords = CLASS_COORDS[token]
+		button.icon = button:CreateTexture(nil, "ARTWORK")
+		button.icon:SetAllPoints()
+		button.icon:SetTexture(CLASS_ICON)
+		if coords then
+			button.icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+		end
+		button.ring = button:CreateTexture(nil, "OVERLAY")
+		button.ring:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		button.ring:SetBlendMode("ADD")
+		button.ring:SetSize(50, 50)
+		button.ring:SetPoint("CENTER", button.icon, "CENTER", 0, 0)
+		button.ring:Hide()
+		button:SetPoint("TOPLEFT", frame, "TOPLEFT", 20 + (index - 1) * (classSize + classGap), -82)
+		button:SetScript("OnClick", function(self)
+			Choose("class", self.classToken)
+		end)
+		button:SetScript("OnEnter", function(self)
+			self.icon:SetVertexColor(1, 1, 1)
+			self.ring:Show()
+			GameTooltip:SetOwner(self, "ANCHOR_TOP")
+			GameTooltip:SetText(self.label)
+			if self.classToken == ClassToken() then
+				GameTooltip:AddLine("Tu clase.", 1, 1, 1)
+			end
+			GameTooltip:Show()
+		end)
+		button:SetScript("OnLeave", function(self)
+			PaintClassButton(self, self.classToken == state.class)
+			GameTooltip:Hide()
+		end)
+		classButtons[index] = button
+	end
+
 	for index = 1, 8 do
-		specButtons[index] = MakeChoice(frame, "", 110, "spec", nil)
+		local tabOk, specTab = pcall(CreateFrame, "Button", "FixmyBisSpecTab" .. index, frame, "PanelTabButtonTemplate")
+		if not tabOk or not specTab then
+			specTab = CreateFrame("Button", "FixmyBisSpecTab" .. index, frame, "UIPanelButtonTemplate")
+		end
+		specButtons[index] = specTab
 		specButtons[index]:Hide()
 		specButtons[index]:SetScript("OnClick", function(self)
 			Choose("spec", { spec = IsRealSpec(self.spec) and self.spec or nil, mode = self.mode })
@@ -667,12 +982,14 @@ local function BuildFrame()
 	end
 
 	scroll = CreateFrame("ScrollFrame", "FixmyBisScroll", frame, "UIPanelScrollFrameTemplate")
+	scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -206)
+	scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -32, 48)
 	content = CreateFrame("Frame", nil, scroll)
-	content:SetSize(430, 1)
+	content:SetSize(760, 1)
 	scroll:SetScrollChild(content)
 	emptyText = content:CreateFontString(nil, "OVERLAY", "GameFontDisable")
 	emptyText:SetPoint("TOPLEFT", 8, -8)
-	emptyText:SetWidth(400)
+	emptyText:SetWidth(740)
 	emptyText:SetJustifyH("LEFT")
 	emptyText:Hide()
 
@@ -686,11 +1003,53 @@ local function BuildFrame()
 
 	local statusText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	statusText:SetPoint("BOTTOMLEFT", 24, 12)
-	statusText:SetPoint("RIGHT", frame, "RIGHT", -24, 0)
+	statusText:SetPoint("RIGHT", frame, "RIGHT", -28, 0)
 	statusText:SetJustifyH("LEFT")
 	statusText:SetWordWrap(true)
 	statusText:SetHeight(32)
-	statusText:SetText("El + abre las alternativas. Ctrl-clic en un objeto lo pone en el probador.")
+	statusText:SetText("El + abre las alternativas. Ctrl-clic lo pone en el probador. Mayús-clic con el chat abierto lo enlaza.")
+
+	local grip = CreateFrame("Button", nil, frame)
+	grip:SetSize(16, 16)
+	grip:SetPoint("BOTTOMRIGHT", -6, 6)
+	grip:SetFrameLevel(frame:GetFrameLevel() + 8)
+	grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+	grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+	grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+	grip:RegisterForDrag("LeftButton")
+	grip:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+		GameTooltip:SetText("Arrastra para ampliar")
+		GameTooltip:Show()
+	end)
+	grip:SetScript("OnLeave", GameTooltip_Hide)
+	grip:SetScript("OnDragStart", function()
+		local left, top = frame:GetLeft(), frame:GetTop()
+		frame:ClearAllPoints()
+		frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+		frame:StartSizing("BOTTOMRIGHT")
+	end)
+	grip:SetScript("OnDragStop", function()
+		frame:StopMovingOrSizing()
+		if type(FixmyBisDB) ~= "table" then FixmyBisDB = {} end
+		FixmyBisDB.width = frame:GetWidth()
+		FixmyBisDB.height = frame:GetHeight()
+		PlaceFilters()
+		FillList()
+	end)
+
+	frame:SetScript("OnSizeChanged", function(self)
+		if not self:IsShown() or not scroll then return end
+		PlaceFilters()
+		FillList()
+	end)
+	if type(FixmyBisDB) == "table" then
+		local width = tonumber(FixmyBisDB.width)
+		local height = tonumber(FixmyBisDB.height)
+		if width and height then
+			frame:SetSize(math.max(560, width), math.max(480, height))
+		end
+	end
 
 	frame:SetScript("OnShow", Refresh)
 	frame:SetScript("OnHide", function()
@@ -821,6 +1180,562 @@ local function EnsureMinimapButton()
 	end)
 	button:SetScript("OnLeave", GameTooltip_Hide)
 end
+
+local function ItemIDFromLink(link)
+	if type(link) ~= "string" then return nil end
+	return tonumber(link:match("item:(%d+)"))
+end
+
+local function AlreadyWearing(itemID)
+	if not GetInventoryItemID then return false end
+	for slot = 0, 19 do
+		if GetInventoryItemID("player", slot) == itemID then
+			return true
+		end
+	end
+	return false
+end
+
+local function RankOf(itemID)
+	EnsureState()
+	local list = CurrentList()
+	if not list or not list.slots then return nil end
+	local faction = state.faction
+	local bestRank, bestSlot, bestExtra
+	for _, slot in ipairs(SLOT_ORDER) do
+		local items = list.slots[slot]
+		if items then
+			local rank = 0
+			for _, item in ipairs(items) do
+				if not faction or item.faction == "both" or item.faction == faction then
+					rank = rank + 1
+					if item.id == itemID and (not bestRank or rank < bestRank) then
+						bestRank, bestSlot, bestExtra = rank, slot, item.extra and true or false
+					end
+				end
+			end
+		end
+	end
+	return bestRank, bestSlot, bestExtra
+end
+
+local alertQueue = {}
+local alertFrame
+local alertBusy = false
+local recentAlert = {}
+
+local function EnsureAlert()
+	if alertFrame then return alertFrame end
+	local ok, created = pcall(CreateFrame, "Frame", "FixmyBisAlert", UIParent, "BackdropTemplate")
+	alertFrame = (ok and created) or CreateFrame("Frame", "FixmyBisAlert", UIParent)
+	alertFrame:SetSize(440, 64)
+	alertFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 180)
+	alertFrame:SetFrameStrata("HIGH")
+	alertFrame:Hide()
+	if alertFrame.SetBackdrop then
+		pcall(alertFrame.SetBackdrop, alertFrame, {
+			bgFile = "Interface\\FrameGeneral\\UI-Background-Rock",
+			edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
+			tile = true, tileSize = 256, edgeSize = 24,
+			insets = { left = 4, right = 4, top = 4, bottom = 4 },
+		})
+	end
+	alertFrame.icon = alertFrame:CreateTexture(nil, "ARTWORK")
+	alertFrame.icon:SetSize(40, 40)
+	alertFrame.icon:SetPoint("LEFT", 12, 0)
+	alertFrame.title = alertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	alertFrame.title:SetPoint("TOPLEFT", alertFrame.icon, "TOPRIGHT", 10, -4)
+	alertFrame.title:SetPoint("RIGHT", -12, 0)
+	alertFrame.title:SetJustifyH("LEFT")
+	alertFrame.title:SetWordWrap(false)
+	alertFrame.line = alertFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	alertFrame.line:SetPoint("BOTTOMLEFT", alertFrame.icon, "BOTTOMRIGHT", 10, 6)
+	alertFrame.line:SetPoint("RIGHT", -12, 0)
+	alertFrame.line:SetJustifyH("LEFT")
+	alertFrame.line:SetWordWrap(false)
+	return alertFrame
+end
+
+local function ShowNextAlert()
+	local entry = table.remove(alertQueue, 1)
+	if not entry then
+		alertBusy = false
+		if alertFrame then alertFrame:Hide() end
+		return
+	end
+	alertBusy = true
+	local popup = EnsureAlert()
+	popup.icon:SetTexture(entry.texture or "Interface\\Icons\\INV_Misc_QuestionMark")
+	local r, g, b = 1, 0.82, 0
+	if GetItemQualityColor then
+		r, g, b = GetItemQualityColor(entry.quality or 1)
+	end
+	popup.title:SetText(entry.name or "Objeto")
+	popup.title:SetTextColor(r, g, b)
+	popup.line:SetText(entry.line or ("Posición " .. entry.rank .. " de importancia en " .. entry.slotName .. ". Lo necesitas."))
+	popup:SetAlpha(0)
+	popup:Show()
+	local elapsedTotal = 0
+	popup:SetScript("OnUpdate", function(self, elapsed)
+		elapsedTotal = elapsedTotal + elapsed
+		if elapsedTotal < 0.15 then
+			self:SetAlpha(elapsedTotal / 0.15)
+		elseif elapsedTotal < 4.6 then
+			self:SetAlpha(1)
+		elseif elapsedTotal < 5.3 then
+			self:SetAlpha(1 - ((elapsedTotal - 4.6) / 0.7))
+		else
+			self:SetScript("OnUpdate", nil)
+			self:Hide()
+			ShowNextAlert()
+		end
+	end)
+end
+
+local function QueueAlert(entry)
+	alertQueue[#alertQueue + 1] = entry
+	if not alertBusy then
+		ShowNextAlert()
+	end
+end
+
+local function ConsiderDrop(itemID)
+	if not itemID then return end
+	local now = GetTime and GetTime() or 0
+	if recentAlert[itemID] and (now - recentAlert[itemID]) < 12 then return end
+	if AlreadyWearing(itemID) then return end
+	local rank, slot, extra = RankOf(itemID)
+	if not rank then return end
+	recentAlert[itemID] = now
+	local name, texture, quality = ItemVisual(itemID)
+	local slotName = SLOT_NAME[slot] or slot
+	local line
+	if extra then
+		line = "Alternativa, posición " .. rank .. " en " .. slotName .. ". Por detrás de la lista principal."
+	else
+		line = "Posición " .. rank .. " de importancia en " .. slotName .. ". Lo necesitas."
+	end
+	QueueAlert({
+		name = name,
+		texture = texture,
+		quality = quality,
+		rank = rank,
+		slotName = slotName,
+		line = line,
+	})
+	local link = ItemLink(itemID)
+	print("|cffffd100FixmyBis|r: " .. (link or name or "Ese objeto") .. " " .. line)
+	if not extra and PlaySound and SOUNDKIT and SOUNDKIT.RAID_WARNING then
+		pcall(PlaySound, SOUNDKIT.RAID_WARNING)
+	end
+end
+
+local lootWatch = CreateFrame("Frame")
+lootWatch:RegisterEvent("START_LOOT_ROLL")
+lootWatch:RegisterEvent("LOOT_READY")
+lootWatch:RegisterEvent("LOOT_OPENED")
+lootWatch:SetScript("OnEvent", function(_, event, arg1)
+	if event == "START_LOOT_ROLL" then
+		if GetLootRollItemLink then
+			ConsiderDrop(ItemIDFromLink(GetLootRollItemLink(arg1)))
+		end
+		return
+	end
+	local count = GetNumLootItems and GetNumLootItems() or 0
+	for index = 1, count do
+		if GetLootSlotLink then
+			ConsiderDrop(ItemIDFromLink(GetLootSlotLink(index)))
+		end
+	end
+end)
+
+local whisperSessions = {}
+local whisperBuckets = {}
+local whisperRing = {}
+local whisperRingAt = 0
+local whisperNextAt = 0
+
+local CLASS_ALIAS = {
+	guerrero = "warrior", warrior = "warrior",
+	paladin = "paladin",
+	cazador = "hunter", hunter = "hunter",
+	picaro = "rogue", rogue = "rogue",
+	sacerdote = "priest", priest = "priest",
+	chaman = "shaman", shaman = "shaman",
+	mago = "mage", mage = "mage",
+	brujo = "warlock", warlock = "warlock",
+	druida = "druid", druid = "druid",
+}
+
+local SLOT_ALIAS = {
+	cabeza = "head", head = "head",
+	cuello = "neck", neck = "neck",
+	hombros = "shoulder", shoulder = "shoulder",
+	espalda = "back", capa = "back", back = "back",
+	pecho = "chest", chest = "chest",
+	munecas = "wrist", wrist = "wrist",
+	manos = "hands", hands = "hands",
+	cintura = "waist", waist = "waist",
+	piernas = "legs", legs = "legs",
+	pies = "feet", feet = "feet",
+	anillos = "finger", anillo = "finger", finger = "finger",
+	abalorios = "trinket", abalorio = "trinket", trinket = "trinket",
+	["mano principal"] = "main-hand", ["main hand"] = "main-hand", ["main-hand"] = "main-hand",
+	["mano izquierda"] = "off-hand", ["off hand"] = "off-hand", ["off-hand"] = "off-hand",
+	["dos manos"] = "two-hand", ["two hand"] = "two-hand", ["two-hand"] = "two-hand",
+	escudo = "shield", shield = "shield",
+	["a distancia"] = "ranged", distancia = "ranged", ranged = "ranged",
+	reliquia = "relic", relic = "relic",
+}
+
+local function Plain(text)
+	text = tostring(text or ""):lower()
+	text = text:gsub("á", "a"):gsub("é", "e"):gsub("í", "i"):gsub("ó", "o"):gsub("ú", "u"):gsub("ü", "u"):gsub("ñ", "n")
+	text = text:gsub("[^%w%s%-]", " ")
+	text = text:gsub("%s+", " ")
+	return (text:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function JoinOptions(names)
+	if #names <= 1 then return names[1] or "" end
+	local head = {}
+	for index = 1, #names - 1 do
+		head[index] = names[index]
+	end
+	return table.concat(head, ", ") .. " o " .. names[#names]
+end
+
+local function ChopWhisper(text)
+	local parts = {}
+	text = tostring(text or "")
+	while #text > 240 do
+		local cut = text:sub(1, 240)
+		local at = cut:match("^.*() / ")
+		if not at then break end
+		parts[#parts + 1] = text:sub(1, at - 1)
+		text = text:sub(at + 3)
+	end
+	if text ~= "" then
+		parts[#parts + 1] = text
+	end
+	return parts
+end
+
+local function Whisper(to, text)
+	if not to or not text or text == "" or not SendChatMessage then return end
+	local bucket = whisperBuckets[to]
+	if not bucket then
+		bucket = {}
+		whisperBuckets[to] = bucket
+		whisperRing[#whisperRing + 1] = to
+	end
+	for _, part in ipairs(ChopWhisper(text)) do
+		bucket[#bucket + 1] = part
+	end
+end
+
+local whisperPump = CreateFrame("Frame")
+whisperPump:SetScript("OnUpdate", function()
+	if #whisperRing == 0 or GetTime() < whisperNextAt then return end
+	local spins = #whisperRing
+	while spins > 0 do
+		whisperRingAt = whisperRingAt + 1
+		if whisperRingAt > #whisperRing then whisperRingAt = 1 end
+		local to = whisperRing[whisperRingAt]
+		local bucket = whisperBuckets[to]
+		local text = bucket and table.remove(bucket, 1)
+		if not text then
+			whisperBuckets[to] = nil
+			table.remove(whisperRing, whisperRingAt)
+			whisperRingAt = whisperRingAt - 1
+		else
+			if #bucket == 0 then
+				whisperBuckets[to] = nil
+				table.remove(whisperRing, whisperRingAt)
+				whisperRingAt = whisperRingAt - 1
+			end
+			local ok = pcall(SendChatMessage, text, "WHISPER", nil, to)
+			if not ok then
+				local short = tostring(to):match("^[^%-]+") or tostring(to)
+				print("|cffffd100FixmyBis|r: no he podido susurrar a " .. short .. ".")
+			end
+			whisperNextAt = GetTime() + 0.7
+			return
+		end
+		spins = spins - 1
+	end
+end)
+
+local function LevelsForClass(class)
+	local seen, levels = {}, {}
+	if not FixmyBisData or not FixmyBisData.lists then return levels end
+	for _, list in ipairs(FixmyBisData.lists) do
+		if list.class == class and not seen[list.level] then
+			seen[list.level] = true
+			levels[#levels + 1] = list.level
+		end
+	end
+	table.sort(levels)
+	return levels
+end
+
+local function SlotsOn(list)
+	local out = {}
+	for _, slot in ipairs(SLOT_ORDER) do
+		local items = list.slots and list.slots[slot]
+		if items and #items > 0 then
+			out[#out + 1] = slot
+		end
+	end
+	return out
+end
+
+local function AskClass(who)
+	Whisper(who, "¿Qué clase? " .. JoinOptions({
+		"Guerrero", "Paladín", "Cazador", "Pícaro", "Sacerdote", "Chamán", "Mago", "Brujo", "Druida",
+	}) .. ". Escribe cancelar para salir.")
+end
+
+local function AskLevel(who, class)
+	local labels = {}
+	for _, level in ipairs(LevelsForClass(class)) do
+		labels[#labels + 1] = tostring(level)
+	end
+	Whisper(who, "¿Qué nivel? " .. JoinOptions(labels) .. ".")
+end
+
+local function AskSpec(who, lists)
+	local labels = {}
+	for _, list in ipairs(lists) do
+		labels[#labels + 1] = ListLabel(list)
+	end
+	Whisper(who, "¿Qué especialización? " .. JoinOptions(labels) .. ".")
+end
+
+local function AskSlot(who, list)
+	local labels = {}
+	for _, slot in ipairs(SlotsOn(list)) do
+		labels[#labels + 1] = SLOT_NAME[slot] or slot
+	end
+	Whisper(who, "¿Qué hueco? " .. JoinOptions(labels) .. ".")
+end
+
+local function ClassFromUnit(unit)
+	if not unit or not UnitExists or not UnitExists(unit) or not UnitClass then return nil end
+	local _, token = UnitClass(unit)
+	token = token and token:lower()
+	if token and CLASS_NAME[token] then return token end
+end
+
+local function ClassOf(sender, guid)
+	if guid and guid ~= "" and GetPlayerInfoByGUID then
+		local _, english = GetPlayerInfoByGUID(guid)
+		english = type(english) == "string" and english:lower() or nil
+		if english and CLASS_NAME[english] then return english end
+	end
+	local short = sender:match("^[^%-]+") or sender
+	local found = ClassFromUnit(short) or ClassFromUnit(sender)
+	if found then return found end
+	local raid = IsInRaid and IsInRaid()
+	local count = raid and GetNumGroupMembers and GetNumGroupMembers() or (GetNumSubgroupMembers and GetNumSubgroupMembers()) or 0
+	for index = 1, count or 0 do
+		local unit = (raid and "raid" or "party") .. index
+		local name = UnitName and UnitName(unit)
+		if name and (name == short or name == sender) then
+			return ClassFromUnit(unit)
+		end
+	end
+end
+
+local function ClickableItem(item)
+	local link = ItemLink(item.id)
+	if link and link:find("|Hitem:", 1, true) and #link < 180 then
+		return link
+	end
+	local colors = {
+		[0] = "9d9d9d",
+		[1] = "ffffff",
+		[2] = "1eff00",
+		[3] = "0070dd",
+		[4] = "a335ee",
+		[5] = "ff8000",
+	}
+	local name = item.name or tostring(item.id)
+	return "|cff" .. (colors[item.quality] or "ffffff") .. "|Hitem:" .. item.id .. "::::::::|h[" .. name .. "]|h|r"
+end
+
+local function MatchList(lists, text)
+	local wanted = Plain(text)
+	local found
+	for _, list in ipairs(lists) do
+		local label = Plain(ListLabel(list))
+		local spec = Plain(list.spec or "")
+		local hit = wanted == label or (IsRealSpec(list.spec) and wanted == spec)
+		if not hit and (list.spec == "pve" or list.spec == "pvp") then
+			hit = wanted == label or wanted == spec or wanted == (list.mode == "pvp" and "jcj" or "jce") or wanted == (list.mode == "pvp" and "pvp" or "pve")
+		end
+		if hit then
+			if found then return nil end
+			found = list
+		end
+	end
+	return found
+end
+
+local function ReplyList(who, session)
+	local list = session.list
+	local items = list.slots and list.slots[session.slot]
+	local lines = {}
+	local title = (CLASS_NAME[session.class] or session.class) .. " nivel " .. session.level .. ", " .. ListLabel(list) .. ", " .. (SLOT_NAME[session.slot] or session.slot) .. ". Pasa el ratón para verlas. Control y clic abre el probador."
+	lines[1] = title
+	local count = 0
+	local function add(item)
+		count = count + 1
+		lines[#lines + 1] = count .. ". " .. ClickableItem(item)
+	end
+	if items then
+		for _, item in ipairs(items) do
+			if not item.extra and (item.faction == "both" or item.faction == session.faction) then
+				add(item)
+			end
+		end
+		local extras = 0
+		for _, item in ipairs(items) do
+			if item.extra and (item.faction == "both" or item.faction == session.faction) then
+				if extras == 0 then
+					lines[#lines + 1] = "Alternativas:"
+				end
+				if extras < 12 then
+					add(item)
+				end
+				extras = extras + 1
+			end
+		end
+		if extras > 12 then
+			lines[#lines + 1] = "Hay " .. (extras - 12) .. " alternativas más."
+		end
+	end
+	if count == 0 then
+		Whisper(who, title .. " No hay piezas de ese hueco para esa facción.")
+		return
+	end
+	local chunk = ""
+	for _, line in ipairs(lines) do
+		local nextChunk = chunk == "" and line or (chunk .. " / " .. line)
+		if #nextChunk > 200 and chunk ~= "" then
+			Whisper(who, chunk)
+			chunk = line
+		else
+			chunk = nextChunk
+		end
+	end
+	if chunk ~= "" then
+		Whisper(who, chunk)
+	end
+end
+
+local function HandleWhisper(message, sender, guid)
+	if not sender or sender == "" or not message then return end
+	local text = Plain(message)
+	if text == "" then return end
+	if text == "cancelar" or text == "parar" or text == "stop" or text == "salir" then
+		if whisperSessions[sender] then
+			whisperSessions[sender] = nil
+			Whisper(sender, "De acuerdo, lo dejo. Susurra fixmybis cuando quieras empezar de nuevo.")
+		end
+		return
+	end
+	if text:find("fixmybis", 1, true) then
+		local short = sender:match("^[^%-]+") or sender
+		local class = ClassOf(sender, guid)
+		print("|cffffd100FixmyBis|r: " .. short .. " ha pedido una lista por susurro.")
+		if class then
+			whisperSessions[sender] = { step = "level", class = class }
+			Whisper(sender, "Te detecto como " .. CLASS_NAME[class] .. ". Si no es tu clase, escribe el nombre.")
+			AskLevel(sender, class)
+		else
+			whisperSessions[sender] = { step = "class" }
+			AskClass(sender)
+		end
+		return
+	end
+	local session = whisperSessions[sender]
+	if not session then return end
+	if session.step == "class" then
+		local class = CLASS_ALIAS[text]
+		if not class then
+			AskClass(sender)
+			return
+		end
+		session.class = class
+		session.step = "level"
+		AskLevel(sender, class)
+		return
+	end
+	if session.step == "level" then
+		local corrected = CLASS_ALIAS[text]
+		if corrected then
+			session.class = corrected
+			AskLevel(sender, corrected)
+			return
+		end
+		local level = tonumber(text:match("(%d+)"))
+		local allowed = false
+		for _, value in ipairs(LevelsForClass(session.class)) do
+			if value == level then allowed = true end
+		end
+		if not allowed then
+			AskLevel(sender, session.class)
+			return
+		end
+		session.level = level
+		session.step = "spec"
+		AskSpec(sender, ListsFor(level, session.class))
+		return
+	end
+	if session.step == "spec" then
+		local list = MatchList(ListsFor(session.level, session.class), text)
+		if not list then
+			AskSpec(sender, ListsFor(session.level, session.class))
+			return
+		end
+		session.list = list
+		session.step = "slot"
+		AskSlot(sender, list)
+		return
+	end
+	if session.step == "slot" then
+		local slot = SLOT_ALIAS[text]
+		local allowed = false
+		if slot then
+			for _, value in ipairs(SlotsOn(session.list)) do
+				if value == slot then allowed = true end
+			end
+		end
+		if not allowed then
+			AskSlot(sender, session.list)
+			return
+		end
+		session.slot = slot
+		session.faction = FactionToken()
+		whisperSessions[sender] = nil
+		if not session.faction then
+			Whisper(sender, "No he podido leer la facción de este personaje. Prueba otra vez en un momento.")
+			return
+		end
+		local ok, err = pcall(ReplyList, sender, session)
+		if not ok then
+			Whisper(sender, "No he podido montar esa lista. Susurra fixmybis para empezar de nuevo.")
+			print("|cffffd100FixmyBis|r: error al montar la lista: " .. tostring(err))
+		end
+	end
+end
+
+local whisperWatch = CreateFrame("Frame")
+whisperWatch:RegisterEvent("CHAT_MSG_WHISPER")
+whisperWatch:SetScript("OnEvent", function(_, _, message, sender, _, _, _, _, _, _, _, _, _, guid)
+	HandleWhisper(message, sender, guid)
+end)
 
 SLASH_FIXMYBIS1 = "/fixmybis"
 SLASH_FIXMYBIS2 = "/bis"

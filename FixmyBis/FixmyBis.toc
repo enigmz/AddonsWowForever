@@ -4,7 +4,7 @@
 ## Notes-esES: Lista BiS de tu clase y facción. Pasa el ratón para ver las estadísticas.
 ## Notes-esMX: Lista BiS de tu clase y facción. Pasa el ratón para ver las estadísticas.
 ## Author: FixmyBis
-## Version: 0.2.1
+## Version: 0.4.4
 ## SavedVariables: FixmyBisDB
 ## IconTexture: Interface\Icons\INV_Chest_Chain
 
