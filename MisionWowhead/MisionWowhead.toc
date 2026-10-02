@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: MisionWowhead
+## Notes: Icono en cada misión del diario para abrir su página de Wowhead.
+## Notes-esES: Icono en cada misión del diario para abrir su página de Wowhead.
+## Notes-esMX: Icono en cada misión del diario para abrir su página de Wowhead.
+## Author: MisionWowhead
+## Version: 1.1.3
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+
+MisionWowhead.lua
