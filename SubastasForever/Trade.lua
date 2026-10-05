@@ -1,5 +1,26 @@
 local _, SF = ...
 
+local DURATION_LABEL = {
+    [1] = "12 h",
+    [2] = "24 h",
+    [3] = "48 h",
+}
+
+function SF.DurationLabel()
+    return DURATION_LABEL[SF.db and SF.db.duration or 2] or "24 h"
+end
+
+function SF.CycleDuration()
+    local duration = SF.db.duration or 2
+    duration = duration + 1
+    if duration > 3 then
+        duration = 1
+    end
+    SF.db.duration = duration
+    SF.Print("Duración de venta: " .. SF.DurationLabel() .. ".")
+    SF.Refresh()
+end
+
 local function BuyQuantity(entry, snap)
     local wanted = entry.maxQty or 1
     if snap.isCommodity then
@@ -91,6 +112,62 @@ function SF.ClearPending()
     SF.pendingBuy = nil
     pcall(C_AuctionHouse.CancelCommoditiesPurchase)
     SF.Refresh()
+end
+
+function SF.PostEntry(entry)
+    if not entry or not SF.ahOpen then
+        SF.Print("Abre la casa de subastas para vender.")
+        return
+    end
+    if SF.pendingBuy then
+        SF.Print("Termina la compra pendiente antes de vender.")
+        return
+    end
+
+    local unit = math.floor(tonumber(entry.sellPrice) or 0)
+    if unit < 1 then
+        SF.Print("El precio de venta tiene que ser al menos 1 cobre.")
+        return
+    end
+
+    local location, stackCount = SF.FirstBagStack(entry.itemID)
+    if not location then
+        SF.Print("No tienes " .. SF.ItemLabel(entry.itemID) .. " en las bolsas.")
+        return
+    end
+    if C_Item and C_Item.IsBound and C_Item.IsBound(location) then
+        SF.Print("Ese objeto está ligado y no se puede subastar.")
+        return
+    end
+
+    local quantity = math.min(entry.maxQty or stackCount, stackCount)
+    if quantity < 1 then
+        return
+    end
+
+    local snap = SF.results[entry.itemID]
+    local isCommodity = snap and snap.isCommodity or false
+    if C_AuctionHouse.GetItemCommodityStatus and Enum and Enum.ItemCommodityStatus then
+        local ok, status = pcall(C_AuctionHouse.GetItemCommodityStatus, location)
+        if ok and status == Enum.ItemCommodityStatus.Commodity then
+            isCommodity = true
+        elseif ok and status == Enum.ItemCommodityStatus.Item then
+            isCommodity = false
+        end
+    end
+
+    local duration = SF.db.duration or 2
+    local posted
+    if isCommodity then
+        posted = pcall(C_AuctionHouse.PostCommodity, location, duration, quantity, unit)
+    else
+        posted = pcall(C_AuctionHouse.PostItem, location, duration, quantity, nil, unit * quantity)
+    end
+    if not posted then
+        SF.Print("La casa no ha aceptado la venta de " .. SF.ItemLabel(entry.itemID) .. ".")
+        return
+    end
+    SF.Print("Publicando " .. quantity .. " x " .. SF.ItemLabel(entry.itemID) .. " a " .. SF.FormatMoney(unit) .. " (" .. SF.DurationLabel() .. ").")
 end
 
 SF.On("COMMODITY_PRICE_UPDATED", function(unitPrice, totalPrice)

@@ -160,6 +160,7 @@ local HELP_TEXT = table.concat({
     "|cffffd100La lista|r",
     "Arriba de cada fila está el precio actual de la casa. Debajo, lo que guardaste: compra máxima, venta y cantidad.",
     "Ganga significa que el precio actual está en tu máximo o por debajo, y hay unidades. Alto significa que ahora cuesta más de lo que estás dispuesto a pagar. La casilla de la izquierda pausa ese objeto. La X lo quita de la lista.",
+    "Vender se enciende si ese objeto está en las bolsas, con la casa abierta. Publica hasta la cantidad de la lista, al precio de venta guardado. La duración es el botón de 12 h, 24 h o 48 h.",
     "Mayús-clic en el nombre lo escribe en el buscador de la casa y lanza la búsqueda.",
     "Las flechas de la izquierda suben o bajan el objeto. Ese orden es el de Comprar siguiente y el escaneo.",
     "Autoordenar, al terminar un escaneo, pone las gangas arriba y los precios altos abajo. Si está desmarcado, la lista se queda como la dejaste.",
@@ -383,8 +384,33 @@ local function CreateRow(parent)
     end)
     row.buy:SetScript("OnLeave", HideTip)
 
+    row.sell = MakeButton(row, "Vender", 64)
+    row.sell:SetPoint("LEFT", row.buy, "RIGHT", 4, 0)
+    row.sell:SetScript("OnClick", function()
+        if row.entry then
+            SF.PostEntry(row.entry)
+        end
+    end)
+    row.sell:SetScript("OnEnter", function(self)
+        local entry = row.entry
+        if not entry then
+            return
+        end
+        local lines = {
+            "Publica hasta " .. (entry.maxQty or 1) .. " unidades a " .. SF.FormatMoney(entry.sellPrice) .. ".",
+            "En bolsas: " .. SF.CountInBags(entry.itemID) .. ".",
+            "Duración: " .. SF.DurationLabel() .. ".",
+        }
+        local snap = SF.results[entry.itemID]
+        if snap and snap.unitPrice and entry.sellPrice > snap.unitPrice then
+            lines[#lines + 1] = "Tu venta está por encima del precio actual. Puede tardar en venderse."
+        end
+        ShowTip(self, "Vender", lines)
+    end)
+    row.sell:SetScript("OnLeave", HideTip)
+
     row.remove = MakeButton(row, "X", 24)
-    row.remove:SetPoint("LEFT", row.buy, "RIGHT", 4, 0)
+    row.remove:SetPoint("LEFT", row.sell, "RIGHT", 4, 0)
     row.remove:SetScript("OnClick", function()
         if row.entry then
             SF.RemoveWatch(row.entry.itemID)
@@ -477,6 +503,12 @@ local function PaintRow(row, entry, index)
     row.up:SetEnabled(index > 1)
     row.down:SetEnabled(index < count)
     row.buy:SetEnabled(deal and SF.ahOpen and not SF.pendingBuy)
+    local inBags = false
+    local bagOk, bagCount = pcall(SF.CountInBags, entry.itemID)
+    if bagOk then
+        inBags = (bagCount or 0) > 0
+    end
+    row.sell:SetEnabled(inBags and SF.ahOpen and not SF.pendingBuy and (entry.sellPrice or 0) >= 1)
 end
 
 function SF.RefreshUI()
@@ -528,6 +560,10 @@ function SF.RefreshUI()
         pendingText:SetText("")
         confirmButton:Hide()
         cancelPendingButton:Hide()
+    end
+
+    if frame.durationButton and SF.DurationLabel then
+        frame.durationButton:SetText(SF.DurationLabel())
     end
 end
 
@@ -845,6 +881,17 @@ function SF.InitUI()
         ShowTip(self, "Comprar siguiente", { "Compra la primera ganga de la lista, de arriba a abajo.", "En materiales, después hay que pulsar Confirmar." })
     end)
     buyNext:SetScript("OnLeave", HideTip)
+
+    local durationButton = MakeButton(frame, "24 h", 70)
+    durationButton:SetPoint("LEFT", buyNext, "RIGHT", 8, 0)
+    durationButton:SetScript("OnClick", function()
+        SF.CycleDuration()
+    end)
+    durationButton:SetScript("OnEnter", function(self)
+        ShowTip(self, "Duración", { "12 h, 24 h o 48 h. La usa el botón Vender de cada objeto." })
+    end)
+    durationButton:SetScript("OnLeave", HideTip)
+    frame.durationButton = durationButton
 
     local autoOpen = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
     autoOpen:SetPoint("BOTTOMRIGHT", -168, 12)
