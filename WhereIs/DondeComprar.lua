@@ -96,6 +96,9 @@ local function ItemIcon(itemID)
 end
 
 local function MarkerTexture(kind, itemID)
+	if kind == "turnin" then
+		return "Interface\\Icons\\INV_Crate_05"
+	end
 	if kind == "mob" then
 		return "Interface\\Icons\\INV_Misc_MonsterClaw_04"
 	end
@@ -375,6 +378,7 @@ local function StaticVendorsFor(itemID)
 					y = vendor.y,
 					faction = vendor.faction or "N",
 					source = "data",
+					kind = vendor.turnin and "turnin" or nil,
 				}
 			end
 		end
@@ -1193,6 +1197,9 @@ local function CreateMarker(index)
 			GameTooltip:AddLine("Se pesca en este banco", 0.45, 0.75, 1)
 			AddDropLines(viewItemID, "fish")
 			AddFishLines(viewItemID)
+		elseif vendor.kind == "turnin" then
+			GameTooltip:AddLine("Entrega aquí la caja sellada", 1, 0.82, 0.45)
+			GameTooltip:AddLine("Paga Favor del mercader", 0.8, 0.8, 0.8)
 		end
 		if vendor.source == "visto" then
 			GameTooltip:AddLine("Sitio guardado al visitarlo", 0.4, 1, 0.5)
@@ -1540,6 +1547,12 @@ local function ShowVendors(itemID, list, otherFaction)
 			if vendor.chance then
 				bits[#bits + 1] = "aprox. " .. vendor.chance .. "%"
 			end
+		elseif vendor.kind == "turnin" then
+			bits = {
+				"Entrega",
+				ZoneLabel(vendor.map),
+				string.format("%d, %d", math.floor(vendor.x * 100 + 0.5), math.floor(vendor.y * 100 + 0.5)),
+			}
 		elseif vendor.kind == "herb" or vendor.kind == "ore" or vendor.kind == "fish" then
 			local nodeName = "Mena"
 			if vendor.kind == "herb" then
@@ -1574,6 +1587,8 @@ local function ShowVendors(itemID, list, otherFaction)
 			button.tip = "Clic para seguir a este bicho en el minimapa."
 		elseif vendor.kind == "herb" or vendor.kind == "ore" or vendor.kind == "fish" then
 			button.tip = "Clic para centrar el mapa en este punto."
+		elseif vendor.kind == "turnin" then
+			button.tip = "Clic para marcar el punto de entrega y seguirlo en el minimapa."
 		else
 			button.tip = "Clic para marcar a este vendedor en el mapa y seguirlo en el minimapa."
 		end
@@ -1582,7 +1597,7 @@ local function ShowVendors(itemID, list, otherFaction)
 		end
 	end
 	local name = ItemName(itemID) or "Objeto"
-	local vendorCount, mobCount, herbCount, oreCount = 0, 0, 0, 0
+	local vendorCount, mobCount, herbCount, oreCount, turninCount = 0, 0, 0, 0, 0
 	for i = 1, #list do
 		local kind = list[i].kind
 		if kind == "mob" then
@@ -1591,11 +1606,16 @@ local function ShowVendors(itemID, list, otherFaction)
 			herbCount = herbCount + 1
 		elseif kind == "ore" then
 			oreCount = oreCount + 1
+		elseif kind == "turnin" then
+			turninCount = turninCount + 1
 		else
 			vendorCount = vendorCount + 1
 		end
 	end
 	local parts = {}
+	if turninCount > 0 then
+		parts[#parts + 1] = turninCount .. (turninCount == 1 and " entrega" or " entregas")
+	end
 	if vendorCount > 0 then
 		parts[#parts + 1] = vendorCount .. (vendorCount == 1 and " vendedor" or " vendedores")
 	end
@@ -1940,11 +1960,22 @@ local function Search(raw, generation)
 		end
 		seen[itemID] = true
 		local n = Norm(name)
+		local crateWord = query == "caja" or query == "cajas" or query == "crate" or query == "crates" or query == "waylaid"
+		local crate = DC.Stock and DC.Stock.crate
+		local isCrate = false
+		if crateWord and crate then
+			for index = 1, #crate do
+				if crate[index] == itemID then
+					isCrate = true
+					break
+				end
+			end
+		end
 		if n == query then
 			exact[#exact + 1] = itemID
 		elseif n:sub(1, #query) == query then
 			starts[#starts + 1] = itemID
-		elseif n:find(query, 1, true) then
+		elseif n:find(query, 1, true) or isCrate then
 			contains[#contains + 1] = itemID
 		end
 	end
@@ -1961,6 +1992,11 @@ local function Search(raw, generation)
 	end
 	local ids = #exact > 0 and exact or (#starts > 0 and starts or contains)
 	matchIDs = ids
+	if query == "caja" or query == "cajas" or query == "crate" or query == "crates" or query == "waylaid" then
+		searchRetries = 0
+		DC.ShowItem(248549)
+		return
+	end
 	if #ids == 0 then
 		if not NamesReady() and searchRetries < 8 then
 			searchRetries = searchRetries + 1
@@ -2433,7 +2469,8 @@ local HELP_TEXT = table.concat({
 	"Escribe un componente, o haz Mayús-clic en él dentro de la mochila.",
 	"",
 	"|cffffd100Qué busca|r",
-	"Vendedores, bichos, plantas, menas, bancos de pesca y desencantar.",
+	"Vendedores, bichos, plantas, menas, bancos de pesca, desencantar y las cajas de Forever.",
+	"Una caja, o la palabra caja, marca dónde entregarla: Marcy Baker en Crestagrana, o Dokimi en Los Baldíos.",
 	"Si no hay sitio, te dice que lo farmees o lo compres en la casa de subastas.",
 	"",
 	"|cffffd100Mapa|r",

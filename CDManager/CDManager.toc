@@ -4,7 +4,7 @@
 ## Notes-esES: Encima de cada enemigo, muestra corte, control, defensivos y ofensivos, y cuándo puedes castear libre.
 ## Notes-esMX: Encima de cada enemigo, muestra corte, control, defensivos y ofensivos, y cuándo puedes castear libre.
 ## Author: Adiction
-## Version: 1.2.4
+## Version: 1.2.8
 ## IconTexture: Interface\Icons\Spell_Frost_IceShock
 
 Freecast.lua

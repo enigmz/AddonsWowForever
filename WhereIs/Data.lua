@@ -49,6 +49,17 @@ DC.Stock = {
 	lumber = {
 		4470, 11291,
 	},
+	-- Cajas de Forever. No se compran: se entregan selladas a Marcy Baker o a Dokimi.
+	crate = {
+		248549,
+		248682, 248683, 248684, 248685, 248686, 248687, 248688, 248689,
+		248690, 248691, 248692, 248693, 248694, 248695, 248696, 248697, 248698, 248699,
+		248702, 248703, 248704, 248705, 248706, 248707,
+		248708, 248709, 248710, 248711, 248712, 248713,
+		248765, 248766, 248767, 248768, 248769,
+		248770, 248771, 248772, 248773, 248774,
+		248775, 248776, 248777, 248778, 248779,
+	},
 }
 
 -- x,y van de 0 a 1 sobre el mapa de la zona.
@@ -88,6 +99,9 @@ DC.Vendors = {
 	{ name = "Ezekiel Graves", zone = "undercity", x = 0.756, y = 0.516, faction = "H", sells = { "poison" } },
 	{ name = "Abigail Shiel", zone = "tirisfal", x = 0.610, y = 0.522, faction = "H", sells = { "basic" } },
 	{ name = "Tari'qa", zone = "barrens", x = 0.518, y = 0.300, faction = "H", sells = { "basic" } },
+
+	{ name = "Marcy Baker", zone = "redridge", x = 0.096, y = 0.709, faction = "A", sells = { "crate" }, turnin = true },
+	{ name = "Dokimi", zone = "barrens", x = 0.501, y = 0.293, faction = "H", sells = { "crate" }, turnin = true },
 
 	{ name = "Jazzik", zone = "barrens", x = 0.626, y = 0.363, faction = "N", sells = { "city", "lumber" } },
 	{ name = "Jase Farlane", zone = "epl", x = 0.757, y = 0.524, faction = "N", sells = { "city", "lumber" } },

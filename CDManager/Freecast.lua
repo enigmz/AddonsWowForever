@@ -1,7 +1,8 @@
--- Iconos de corte, control, defensivos y ofensivos sobre la placa de nombre.
--- LIBRE sale cuando el corte de ese enemigo está en recuperación.
--- El tiempo se conoce al verle usar la habilidad. Hasta entonces se cuenta como disponible.
--- Prueba: también encima de los aliados. Pasar a false cuando ya no haga falta.
+-- Lista de cortes, controles, defensivos y ofensivos.
+-- No lee placas ni el registro de combate: en este cliente eso bloquea el addon.
+-- Sigue al objetivo, al foco, al grupo y a los jefes.
+-- LIBRE sale cuando el corte de ese jugador está en recuperación.
+-- Prueba: también los aliados. Pasar a false cuando ya no haga falta.
 local SHOW_ALLIES = true
 
 local SPELLS = {
@@ -74,6 +75,23 @@ local CLASS_SPELLS = {
 }
 
 local KIND_ORDER = { interrupt = 1, stun = 2, fear = 3, defensive = 4, offensive = 5 }
+
+local SPELL_CLASS = {
+	pummel = "WARRIOR", shieldbash = "WARRIOR", shout = "WARRIOR", rage = "WARRIOR",
+	shieldwall = "WARRIOR", retaliation = "WARRIOR", laststand = "WARRIOR",
+	recklessness = "WARRIOR", deathwish = "WARRIOR", sweeping = "WARRIOR",
+	hoj = "PALADIN", bubble = "PALADIN", bop = "PALADIN", divprot = "PALADIN", wings = "PALADIN",
+	feign = "HUNTER", rapidfire = "HUNTER", bestial = "HUNTER",
+	kick = "ROGUE", kidney = "ROGUE", evasion = "ROGUE", vanish = "ROGUE",
+	adrenaline = "ROGUE", bladeflurry = "ROGUE", coldblood = "ROGUE", preparation = "ROGUE",
+	silence = "PRIEST", scream = "PRIEST", ward = "PRIEST", infusion = "PRIEST", innerfocus = "PRIEST",
+	earthshock = "SHAMAN", windshear = "SHAMAN", grounding = "SHAMAN", elemental = "SHAMAN",
+	bloodlust = "SHAMAN", heroism = "SHAMAN",
+	counterspell = "MAGE", iceblock = "MAGE", coldsnap = "MAGE", arcanepower = "MAGE",
+	combustion = "MAGE", pom = "MAGE", icyveins = "MAGE",
+	spelllock = "WARLOCK", fear = "WARLOCK", howl = "WARLOCK", amplify = "WARLOCK",
+	bash = "DRUID", barkskin = "DRUID",
+}
 
 local PRIMARY_KICK = {
 	WARRIOR = "pummel",
@@ -301,221 +319,135 @@ local function UsableString(value)
 	if ok then return value end
 end
 
-local function SafeClass(unit)
-	if not UnitClass then return nil end
-	local ok, _, token = pcall(UnitClass, unit)
-	if not ok then return nil end
-	return UsableString(token)
-end
+local people = {}
 
-local function SafeGUID(unit)
-	if not UnitGUID then return nil end
-	local ok, guid = pcall(UnitGUID, unit)
-	if ok then return UsableString(guid) end
-end
-
-local function Forbidden(object)
-	if not object then return true end
-	if object.IsForbidden then
-		local ok, forbidden = pcall(object.IsForbidden, object)
-		if ok and forbidden then return true end
-	end
-	return false
-end
-
-local function VisualOf(plate)
-	if Forbidden(plate) then return nil end
-	local bar, unitFrame
-	pcall(function()
-		unitFrame = plate.UnitFrame or plate.unitFrame
-		bar = unitFrame and (unitFrame.healthBar or unitFrame.HealthBar)
-	end)
-	if bar and not Forbidden(bar) then return bar end
-	if unitFrame and not Forbidden(unitFrame) then return unitFrame end
-	return plate
-end
-
-local function UnitOf(plate)
-	if Forbidden(plate) then return nil end
-	local unit
-	pcall(function()
-		local unitFrame = plate.UnitFrame or plate.unitFrame
-		unit = plate.namePlateUnitToken or plate.namePlateUnitID or plate.unitToken or (unitFrame and unitFrame.unit)
-	end)
-	return unit
-end
-
-local function MakeHolder(plate)
+local function MakeHolder(guid)
 	local holder = CreateFrame("Frame", nil, UIParent)
-	holder:SetSize(ICON, ICON)
+	holder:SetSize(ICON, ICON + 14)
 	holder.icons = {}
+	local name = holder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	name:SetPoint("BOTTOM", holder, "TOP", 0, 14)
+	local file = name:GetFont()
+	if file then name:SetFont(file, 12, "OUTLINE") end
+	holder.name = name
 	local free = holder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	free:SetText("LIBRE")
 	free:SetTextColor(0.2, 1, 0.35)
-	local file = free:GetFont()
 	if file then free:SetFont(file, 12, "OUTLINE") end
 	holder.free = free
-	holders[plate] = holder
+	holders[guid] = holder
 	return holder
 end
 
-local function Place(holder, plate)
-	local anchor = VisualOf(plate)
-	if not anchor then
-		holder:Hide()
-		return
+local function StackRows()
+	local shown = {}
+	for _, holder in pairs(holders) do
+		if holder:IsShown() then
+			shown[#shown + 1] = holder
+		end
 	end
-	holder:ClearAllPoints()
-	if not pcall(holder.SetPoint, holder, "BOTTOM", anchor, "TOP", 0, 6) then
-		holder:Hide()
-		return
-	end
-	local okLevel, level = pcall(anchor.GetFrameLevel, anchor)
-	if okLevel and type(level) == "number" then
-		holder:SetFrameLevel(level + 20)
+	table.sort(shown, function(a, b)
+		return (a.sortName or "") < (b.sortName or "")
+	end)
+	for index = 1, #shown do
+		local holder = shown[index]
+		holder:ClearAllPoints()
+		holder:SetPoint("TOP", UIParent, "TOP", 0, -120 - (index - 1) * (ICON + 32))
 	end
 end
 
-local function PlateOf(unit)
-	if not unit or not C_NamePlate or not C_NamePlate.GetNamePlateForUnit then return nil end
-	local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
-	if ok then return plate end
-end
-
-local function ShouldShow(unit)
-	if not unit or not UnitExists or not UnitExists(unit) then return false end
-	if UnitIsUnit and UnitIsUnit(unit, "player") then return false end
-	if UnitIsPlayer and not UnitIsPlayer(unit) then return false end
-	if UnitIsDead and UnitIsDead(unit) then return false end
-	if UnitCanAttack and UnitCanAttack("player", unit) then return true end
-	return SHOW_ALLIES
-end
-
-local function PaintUnit(unit, plate)
-	plate = plate or PlateOf(unit)
-	if not plate then return end
-	local holder = holders[plate] or MakeHolder(plate)
-	local ok, show = pcall(ShouldShow, unit)
-	if not ok or not show then
-		holder.unit = nil
-		holder:Hide()
-		return
-	end
-	Place(holder, plate)
-	holder.unit = unit
-	holder.guid = SafeGUID(unit) or unit
-	holder.class = SafeClass(unit)
+local function PaintPerson(guid)
+	local person = people[guid]
+	if not person then return end
+	local holder = holders[guid] or MakeHolder(guid)
+	holder.guid = guid
+	holder.class = person.class
+	holder.sortName = person.name or guid
+	if holder.name then holder.name:SetText(person.name or "") end
 	Layout(holder)
 end
 
-local function EachPlate(fn)
-	local found = false
-	if C_NamePlate and C_NamePlate.GetNamePlates then
-		local ok, plates = pcall(C_NamePlate.GetNamePlates)
-		if ok and type(plates) == "table" then
-			for _, plate in pairs(plates) do
-				if plate then
-					found = true
-					fn(plate)
-				end
+local function RefreshPeople()
+	local now = Now()
+	for guid, person in pairs(people) do
+		if now - person.at > 45 then
+			people[guid] = nil
+			if holders[guid] then
+				holders[guid]:Hide()
+				holders[guid].guid = nil
 			end
+		else
+			PaintPerson(guid)
 		end
 	end
-	if found then return end
-	for index = 1, 40 do
-		local plate = _G["NamePlate" .. index]
-		if plate and plate.IsShown and plate:IsShown() then
-			fn(plate)
-		end
-	end
+	StackRows()
 end
 
-local function RefreshPlates()
-	local seenPlate = {}
-	EachPlate(function(plate)
-		seenPlate[plate] = true
-		local unit = UnitOf(plate)
-		if unit then PaintUnit(unit, plate) end
-	end)
-	for plate, holder in pairs(holders) do
-		if not seenPlate[plate] then
-			holder:Hide()
-			holder.unit = nil
-		end
-	end
+local function SafeUnitName(unit)
+	if not UnitName then return nil end
+	local ok, name = pcall(UnitName, unit)
+	if ok then return UsableString(name) end
 end
 
-local function OwnerGUID(petGUID)
-	for _, holder in pairs(holders) do
-		local unit = holder.unit
-		if unit and UnitGUID and UnitGUID(unit .. "pet") == petGUID then
-			return UnitGUID(unit)
-		end
-	end
+local function SafeUnitClass(unit)
+	if not UnitClass then return nil end
+	local ok, _, token = pcall(UnitClass, unit)
+	if ok then return UsableString(token) end
 end
 
-local function NoteCast(sourceGUID, sourceFlags, spellId, spellName)
-	if not sourceGUID or sourceGUID == "" then return end
-	if UnitGUID and sourceGUID == UnitGUID("player") then return end
-	local spell = MatchSpell(spellId, spellName)
+local function AllowedUnit(unit)
+	if type(unit) ~= "string" or unit == "" or unit == "player" then return false end
+	if unit:find("nameplate", 1, true) then return false end
+	if unit == "target" or unit == "focus" or unit == "softenemy" or unit == "softfriend" then return true end
+	if unit:find("^party") or unit:find("^raid") or unit:find("^boss") or unit:find("^arena") then return true end
+	return false
+end
+
+local function NoteUnitCast(unit, spellId)
+	if not AllowedUnit(unit) then return end
+	local spell = MatchSpell(spellId, nil)
 	if not spell then return end
-	local friendly = COMBATLOG_OBJECT_REACTION_FRIENDLY
-	if not SHOW_ALLIES and sourceFlags and friendly and bit and bit.band and bit.band(sourceFlags, friendly) > 0 then return end
-	Remember(sourceGUID, spell)
-	local owner = OwnerGUID(sourceGUID)
-	if owner then Remember(owner, spell) end
-	RefreshPlates()
-end
-
-local function ReadCombat(...)
-	local subevent, sourceGUID, sourceFlags, spellId, spellName
-	if CombatLogGetCurrentEventInfo then
-		local info = { CombatLogGetCurrentEventInfo() }
-		subevent = info[2]
-		sourceGUID = info[4]
-		sourceFlags = info[6]
-		spellId = info[12]
-		spellName = info[13]
-	else
-		subevent = select(2, ...)
-		sourceGUID = select(4, ...)
-		sourceFlags = select(6, ...)
-		spellId = select(12, ...)
-		spellName = select(13, ...)
+	local name = SafeUnitName(unit)
+	if not name then return end
+	if not SHOW_ALLIES and UnitCanAttack then
+		local ok, enemy = pcall(UnitCanAttack, "player", unit)
+		if ok and not enemy then return end
 	end
-	if subevent ~= "SPELL_CAST_SUCCESS" then return end
-	NoteCast(sourceGUID, sourceFlags, spellId, spellName)
+	local key = name
+	Remember(key, spell)
+	local person = people[key] or {}
+	person.name = name
+	person.class = SafeUnitClass(unit) or person.class or SPELL_CLASS[spell.key]
+	person.at = Now()
+	people[key] = person
+	PaintPerson(key)
+	StackRows()
 end
 
 local elapsed = 0
+local told = false
 local watcher = CreateFrame("Frame")
-watcher:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-watcher:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-watcher:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+watcher:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-watcher:SetScript("OnEvent", function(_, event, unit)
-	if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-		ReadCombat()
+watcher:SetScript("OnEvent", function(_, event, unit, _, spellId)
+	if event == "UNIT_SPELLCAST_SUCCEEDED" then
+		if type(spellId) ~= "number" then return end
+		NoteUnitCast(unit, spellId)
 		return
 	end
-	if event == "NAME_PLATE_UNIT_REMOVED" then
-		local plate = PlateOf(unit)
-		local holder = plate and holders[plate]
-		if holder then
-			holder:Hide()
-			holder.unit = nil
-		end
-		return
+	for guid, holder in pairs(holders) do
+		holder:Hide()
+		holder.guid = nil
+		people[guid] = nil
 	end
-	if event == "NAME_PLATE_UNIT_ADDED" then
-		PaintUnit(unit)
-		return
+	if not told and DEFAULT_CHAT_FRAME then
+		told = true
+		DEFAULT_CHAT_FRAME:AddMessage("|cff7ec8ffCDManager 1.2.8|r cargado. Sigue al objetivo, al grupo y a los jefes.")
 	end
-	RefreshPlates()
 end)
 watcher:SetScript("OnUpdate", function(_, delta)
 	elapsed = elapsed + delta
 	if elapsed < 0.2 then return end
 	elapsed = 0
-	RefreshPlates()
+	RefreshPeople()
 end)
