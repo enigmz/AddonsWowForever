@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: PvP
+## Notes: Marca en el mapa dónde apuntarte a cada campo de batalla.
+## Notes-esES: Marca en el mapa dónde apuntarte a cada campo de batalla.
+## Notes-esMX: Marca en el mapa dónde apuntarte a cada campo de batalla.
+## Author: Adiction
+## Version: 1.0.0
+## SavedVariables: PvPDB
+## IconTexture: Interface\Icons\INV_BannerPVP_02
+
+PvP.lua

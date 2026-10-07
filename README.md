@@ -90,3 +90,16 @@ Lista los bufos de los campamentos de Forever y marca cuáles tienes. El cliente
 Los de clase que tapan a los del campamento: Reyes (paladín, desde nivel 20), Entereza (sacerdote), Intelecto Arcano (mago), Espíritu divino (sacerdote, desde nivel 30), Marca de lo Salvaje (druida), Sabiduría y Poderío (paladín), Fuerza de la tierra (chamán, rama Mejora) y el crítico del lechúcico lunar (Equilibrio, 31 puntos) o de Líder de la manada (Feral, 21 puntos). El paladín solo pone una bendición por persona. La tienda no la cubre ninguna clase.
 
 Variables guardadas: `CampamentosDB`.
+
+## PvP 1.0.0
+
+Marca en el mapa dónde apuntarte a cada campo de batalla de Forever. Solo muestra los puntos de tu facción.
+
+- El botón del minimapa abre la ventana. También `/pvp`. Se puede arrastrar, y el botón se mueve alrededor del minimapa. Escape la cierra.
+- Garganta Grito de Guerra: 10 contra 10, desde nivel 10. Entrada en la Arboleda Ala de Plata (Alianza) o en el Campamento Mor'shan (Horda), y maestros de batalla en las tres ciudades.
+- Cuenca de Arathi: 15 contra 15, desde nivel 20. Entrada en el Refugio de la Zaga o en Sentencia.
+- Valle de Alterac: 40 contra 40, niveles 51 a 60. Entrada en las Montañas de Alterac.
+- Islas Lanza Negra: 15 contra 15, desde nivel 30. La cola está en las ciudades, no en el campo.
+- Al elegir un campo, el mapa se abre en el primer punto y salen botones para la entrada y para cada ciudad. El pin solo se ve en el mapa de esa zona. Al pasar el ratón dice con quién hablar. Cerrar la ventana no quita las marcas.
+
+Variables guardadas: `PvPDB`.
