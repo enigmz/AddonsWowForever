@@ -4,7 +4,7 @@
 ## Notes-esES: Muestra qué bufos de campamento tienes y cuáles te faltan.
 ## Notes-esMX: Muestra qué bufos de campamento tienes y cuáles te faltan.
 ## Author: Adiction
-## Version: 1.0.1
+## Version: 1.0.4
 ## SavedVariables: CampamentosDB
 ## IconTexture: Interface\Icons\Spell_Fire_Fire
 

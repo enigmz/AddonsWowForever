@@ -303,7 +303,7 @@ end
 
 local function MakeFrame()
 	frame = CreateFrame("Frame", "CampamentosFrame", UIParent)
-	frame:SetSize(460, 620)
+	frame:SetSize(460, 760)
 	frame:SetFrameStrata("DIALOG")
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
@@ -367,17 +367,27 @@ local function MakeFrame()
 	end
 
 	local extra = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	extra:SetPoint("BOTTOMLEFT", 16, 28)
-	extra:SetPoint("BOTTOMRIGHT", -16, 28)
+	extra:SetPoint("BOTTOMLEFT", 16, 196)
+	extra:SetPoint("BOTTOMRIGHT", -16, 196)
 	extra:SetJustifyH("LEFT")
-	extra:SetHeight(36)
+	extra:SetHeight(32)
 	frame.extra = extra
 
+	local slots = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	slots:SetPoint("BOTTOMLEFT", 24, 48)
+	slots:SetPoint("BOTTOMRIGHT", -24, 48)
+	slots:SetJustifyH("CENTER")
+	slots:SetHeight(140)
+	if slots.SetSpacing then slots:SetSpacing(3) end
+	slots:SetText("|cffffd100Básica|r: 3 objetos. Cocina 1.\n|cffffd100Oficial|r: 5 objetos. Cocina 140.\n|cffffd100Experto|r: 10 objetos. Cocina 220.\n\nEl fuego no cuenta.\nCada persona coloca uno, y comparten una hora.\nEl robot y los talleres ocupan un hueco y no dan bufo.")
+
 	local hint = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	hint:SetPoint("BOTTOMLEFT", 16, 10)
-	hint:SetPoint("BOTTOMRIGHT", -16, 10)
-	hint:SetJustifyH("LEFT")
-	hint:SetText("Siéntate un minuto en la hoguera. La tienda basta con medio. Verde: lo tienes. Amarillo: lo cubre tu clase.")
+	hint:SetPoint("BOTTOMLEFT", 16, 14)
+	hint:SetPoint("BOTTOMRIGHT", -16, 14)
+	hint:SetJustifyH("CENTER")
+	hint:SetHeight(28)
+	if hint.SetSpacing then hint:SetSpacing(2) end
+	hint:SetText("Siéntate un minuto en la hoguera. La tienda basta con medio.\nVerde: lo tienes. Amarillo: lo cubre tu clase.")
 
 	frame.ready = false
 	frame:SetScript("OnShow", function(self)
@@ -399,6 +409,78 @@ local function Toggle()
 		frame:Show()
 		Refresh()
 	end
+end
+
+local function PlaceMinimapButton(button, angle)
+	local radius = Minimap and Minimap:GetWidth() / 2
+	if not radius or radius < 20 then radius = 80 end
+	local rad = math.rad(angle)
+	button:ClearAllPoints()
+	button:SetPoint("CENTER", Minimap, "CENTER", math.cos(rad) * radius, math.sin(rad) * radius)
+end
+
+local function EnsureMinimapButton()
+	if _G.CampamentosMinimapButton or not Minimap or not db then return end
+	local button = CreateFrame("Button", "CampamentosMinimapButton", Minimap)
+	button:SetSize(31, 31)
+	button:SetFrameStrata("MEDIUM")
+	button:SetFrameLevel((Minimap:GetFrameLevel() or 1) + 12)
+	button:RegisterForClicks("LeftButtonUp")
+	button:RegisterForDrag("LeftButton")
+	button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+	local border = button:CreateTexture(nil, "OVERLAY")
+	border:SetSize(53, 53)
+	border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+	border:SetPoint("TOPLEFT")
+
+	local icon = button:CreateTexture(nil, "BACKGROUND")
+	icon:SetSize(20, 20)
+	icon:SetTexture("Interface\\Icons\\Spell_Fire_Fire")
+	icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	icon:SetPoint("CENTER", 1, 0)
+
+	local angle = tonumber(db.minimapAngle) or 80
+	PlaceMinimapButton(button, angle)
+
+	local downX, downY
+	button:SetScript("OnMouseDown", function(_, mouseButton)
+		if mouseButton == "LeftButton" then
+			downX, downY = GetCursorPosition()
+		end
+	end)
+	button:SetScript("OnDragStart", function(self)
+		self:SetScript("OnUpdate", function()
+			local cx, cy = GetCursorPosition()
+			if downX and cx and ((cx - downX) ^ 2 + (cy - downY) ^ 2) < 64 then return end
+			local mx, my = Minimap:GetCenter()
+			local scale = Minimap:GetEffectiveScale()
+			if scale and scale > 0 then
+				cx, cy = cx / scale, cy / scale
+			end
+			if not mx or not my or not cx or not cy then return end
+			local nextAngle = math.deg(math.atan2(cy - my, cx - mx))
+			db.minimapAngle = nextAngle
+			PlaceMinimapButton(self, nextAngle)
+		end)
+	end)
+	button:SetScript("OnDragStop", function(self)
+		self:SetScript("OnUpdate", nil)
+	end)
+	button:SetScript("OnClick", function()
+		local cx, cy = GetCursorPosition()
+		if downX and cx and ((cx - downX) ^ 2 + (cy - downY) ^ 2) >= 64 then return end
+		Toggle()
+	end)
+	button:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+		GameTooltip:SetText("Campamentos")
+		GameTooltip:AddLine("Clic para abrir. Arrastra para moverlo.", 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	button:SetScript("OnLeave", function()
+		GameTooltip:Hide()
+	end)
 end
 
 local function PrintAuras()
@@ -453,9 +535,10 @@ watcher:SetScript("OnEvent", function(_, event, arg)
 		db = CampamentosDB
 		BuildNames()
 		if not frame then MakeFrame() end
+		EnsureMinimapButton()
 		if event == "PLAYER_LOGIN" and not told and DEFAULT_CHAT_FRAME then
 			told = true
-			DEFAULT_CHAT_FRAME:AddMessage("|cffffd100Campamentos|r cargado. /campamentos muestra los bufos que tienes y los que te faltan.")
+			DEFAULT_CHAT_FRAME:AddMessage("|cffffd100Campamentos|r cargado. El botón del minimapa abre los bufos.")
 			if db.open ~= false then frame:Show() end
 		end
 		return

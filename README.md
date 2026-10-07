@@ -76,14 +76,15 @@ Muestra en qué capa de Forever estás y pide el cambio a otra. La capa sale del
 
 Variables guardadas: `CapaDB`.
 
-## Campamentos 1.0.1
+## Campamentos 1.0.4
 
 Lista los bufos de los campamentos de Forever y marca cuáles tienes. El cliente los junta en un solo aura; el addon lee ese aura y su descripción.
 
-- `/campamentos` o `/camp` abre la ventana. Se puede arrastrar. Escape la cierra.
+- El botón del minimapa abre y cierra la ventana. También `/campamentos` o `/camp`. Se puede arrastrar, y el botón del minimapa se mueve alrededor de él. Escape la cierra.
 - Verde: lo recogiste en el campamento. Amarillo: no está el del campamento porque ya lo cubre el bufo de clase, y no se acumulan. Rojo: te falta.
 - Arriba dice cuántos de los nueve llevas y cuánto les queda. Si hay una hoguera cerca, o estás sentado esperando el minuto, también lo indica.
 - Cada fila dice el objeto y la profesión que hay que colocar en la hoguera. Hay que sentarse un minuto; la tienda de descanso basta con medio y solo se puede recoger una vez por hora.
+- El pie indica los huecos de cada hoguera, en líneas separadas: básica 3 objetos (Cocina 1), oficial 5 (Cocina 140) y experto 10 (Cocina 220). El fuego no cuenta. Cada persona coloca un objeto y comparten una hora. El robot y los talleres ocupan un hueco y no dan bufo.
 - `/campamentos auras` escribe en el chat los bufos activos, por si el cliente no detalla los efectos.
 
 Los de clase que tapan a los del campamento: Reyes (paladín, desde nivel 20), Entereza (sacerdote), Intelecto Arcano (mago), Espíritu divino (sacerdote, desde nivel 30), Marca de lo Salvaje (druida), Sabiduría y Poderío (paladín), Fuerza de la tierra (chamán, rama Mejora) y el crítico del lechúcico lunar (Equilibrio, 31 puntos) o de Líder de la manada (Feral, 21 puntos). El paladín solo pone una bendición por persona. La tienda no la cubre ninguna clase.
