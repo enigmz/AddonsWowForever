@@ -2,18 +2,6 @@
 
 Addons propios para World of Warcraft Forever (cliente híbrido, interfaz 16001). Cada carpeta es un addon: el archivo `.toc` tiene que llamarse igual que la carpeta. Copia la carpeta a `Interface/AddOns` y reinicia el cliente la primera vez; un addon nuevo no aparece solo con `/reload`.
 
-## FixmyBis 0.4.4
-
-Lista BiS de tu clase y facción, con datos de [foreverchanges.pro](https://foreverchanges.pro). Hay listas de nivel 20 y del nivel actual, para las nueve clases y sus especializaciones, en JcE y JcJ.
-
-- `/fixmybis` o `/bis` abre la ventana. También hay botón en el minimapa y una pestaña en el personaje.
-- Pasa el ratón por un objeto para ver las estadísticas.
-- Ctrl-clic lo manda al probador. Mayús-clic, con el chat abierto, lo enlaza.
-- La lista curada va primero. El `+` abre alternativas de mazmorra y misión.
-- Si alguien te susurra `fixmybis`, el addon le pregunta clase, nivel, especialización y hueco, y le responde con objetos clicables. La facción la toma de tu personaje, no se la pregunta. Puede cancelar con `cancelar`, `parar`, `stop` o `salir`. Varias personas pueden preguntar a la vez.
-
-Variables guardadas: `FixmyBisDB`.
-
 ## SubastasForever 1.1.23
 
 Vigila precios en la casa de subastas. Si un objeto de la lista baja de tu máximo, puedes comprarlo. Si lo tienes en las bolsas, puedes publicarlo al precio de venta que guardaste.
