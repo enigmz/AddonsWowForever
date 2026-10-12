@@ -1,5 +1,7 @@
 local _, SF = ...
 
+local MAX_ROWS = 40
+
 local PRICE_SORTS = {}
 if Enum and Enum.AuctionHouseSortOrder and Enum.AuctionHouseSortOrder.Price then
     PRICE_SORTS = {
@@ -16,6 +18,7 @@ end
 
 local function ReadCommodity(itemID, maxBuy)
     local count = C_AuctionHouse.GetNumCommoditySearchResults(itemID) or 0
+    if count > MAX_ROWS then count = MAX_ROWS end
     local cheapest, available = nil, 0
     for index = 1, count do
         local result = C_AuctionHouse.GetCommoditySearchResultInfo(itemID, index)
@@ -39,6 +42,7 @@ end
 
 local function ReadItem(itemKey, maxBuy, maxQty)
     local count = C_AuctionHouse.GetNumItemSearchResults(itemKey) or 0
+    if count > MAX_ROWS then count = MAX_ROWS end
     local cheapest, available = nil, 0
     local auctionID, buyoutAmount, buyQty
     for index = 1, count do
@@ -114,6 +118,7 @@ local function LowestUnit(itemID, itemKey, isCommodity)
     local cheapest
     if isCommodity then
         local count = C_AuctionHouse.GetNumCommoditySearchResults(itemID) or 0
+        if count > MAX_ROWS then count = MAX_ROWS end
         for index = 1, count do
             local result = C_AuctionHouse.GetCommoditySearchResultInfo(itemID, index)
             if result and result.unitPrice and result.unitPrice > 0 and (not cheapest or result.unitPrice < cheapest) then
@@ -126,6 +131,7 @@ local function LowestUnit(itemID, itemKey, isCommodity)
         return nil
     end
     local count = C_AuctionHouse.GetNumItemSearchResults(itemKey) or 0
+    if count > MAX_ROWS then count = MAX_ROWS end
     for index = 1, count do
         local result = C_AuctionHouse.GetItemSearchResultInfo(itemKey, index)
         if result and result.buyoutAmount and result.buyoutAmount > 0 then
@@ -173,24 +179,6 @@ local function TryFinish(itemID, fromCommodityEvent)
             return
         end
         waiting.isCommodity = kind
-    end
-
-    if kind and not waiting.askedMore then
-        local partial = C_AuctionHouse.HasFullCommoditySearchResults and not C_AuctionHouse.HasFullCommoditySearchResults(itemID)
-        if partial then
-            waiting.askedMore = true
-            if pcall(C_AuctionHouse.RequestMoreCommoditySearchResults, itemID) then
-                return
-            end
-        end
-    elseif not kind and not waiting.askedMore then
-        local partial = waiting.itemKey and C_AuctionHouse.HasFullItemSearchResults and not C_AuctionHouse.HasFullItemSearchResults(waiting.itemKey)
-        if partial then
-            waiting.askedMore = true
-            if pcall(C_AuctionHouse.RequestMoreItemSearchResults, waiting.itemKey) then
-                return
-            end
-        end
     end
 
     local entry = SF.FindWatch(itemID)

@@ -2,7 +2,7 @@
 
 Addons propios para World of Warcraft Forever (cliente híbrido, interfaz 16001). Cada carpeta es un addon: el archivo `.toc` tiene que llamarse igual que la carpeta. Copia la carpeta a `Interface/AddOns` y reinicia el cliente la primera vez; un addon nuevo no aparece solo con `/reload`.
 
-## SubastasForever 1.1.23
+## SubastasForever 1.1.24
 
 Vigila precios en la casa de subastas. Si un objeto de la lista baja de tu máximo, puedes comprarlo. Si lo tienes en las bolsas, puedes publicarlo al precio de venta que guardaste.
 
@@ -13,7 +13,7 @@ Vigila precios en la casa de subastas. Si un objeto de la lista baja de tu máxi
 - Comprar solo se enciende con la casa abierta y si es ganga. En materiales hacen falta dos clics: Comprar y luego Confirmar. En equipo, recetas y el resto, un clic cierra la compra.
 - Comprar siguiente toma la primera ganga de la lista.
 - Vender se enciende si el objeto está en las bolsas, la casa está abierta y el precio de venta es al menos 1 cobre. Publica hasta la cantidad de la lista. La duración es el botón de 12 h, 24 h o 48 h.
-- Escanear mira una vez todos los objetos activos. Reescanear, si está marcado, repite cada minuto con la casa abierta y avisa de gangas.
+- Escanear mira una vez todos los objetos activos, solo las 40 primeras filas de cada uno. Reescanear, si está marcado, repite cada minuto con la casa abierta y avisa de gangas.
 - `/sf escanear` busca precios. `/sf estado` resume la lista. `/sf cancelar` descarta una compra de materiales a medias.
 - Con la casa abierta, los objetos de la mochila que se pueden subastar llevan una moneda. Esa marca no publica nada.
 - El juego no deja comprar ni confirmar sin tu clic. Con la casa cerrada no hay precios nuevos ni compra ni venta.
@@ -52,9 +52,9 @@ Hasta que no ve un corte, no marca `LIBRE`: el corte principal podría seguir di
 
 Al entrar, el chat dice `CDManager 1.2.8 cargado` si esta versión es la que está activa.
 
-## Capa 1.0.1
+## Capa 1.0.2
 
-Muestra en qué capa de Forever estás y pide el cambio a otra. La capa sale del identificador de zona de un NPC, vehículo u objeto. La letra (A, B, C…) es local: ordena las capas que tú has visto en esa zona. El número es el identificador real. Arriba de la pantalla hay una etiqueta arrastrable; un clic abre el panel.
+Muestra en qué capa de Forever estás y pide el cambio a otra. La capa sale del identificador de zona de un NPC que tengas seleccionado, bajo el ratón o en el foco. La letra (A, B, C…) es local: ordena las capas que tú has visto en esa zona. El número es el identificador real. Arriba de la pantalla hay una etiqueta arrastrable; un clic abre el panel.
 
 - `/capa` abre el panel.
 - `/capa pedir` pide un cambio. `/capa B` pide esa letra. `/capa 2105` pide ese identificador. Un número menor de 100 se trata como posición de letra.

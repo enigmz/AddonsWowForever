@@ -4,7 +4,7 @@
 ## Notes-esES: Muestra la capa en la que estás y pide un cambio a otra.
 ## Notes-esMX: Muestra la capa en la que estás y pide un cambio a otra.
 ## Author: Adiction
-## Version: 1.0.1
+## Version: 1.0.2
 ## SavedVariables: CapaDB
 ## IconTexture: Interface\Icons\INV_Misc_Map_01
 

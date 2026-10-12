@@ -126,35 +126,11 @@ local function IdForLetter(zone, letter)
 	end
 end
 
-local function EachUnit(fn)
-	fn("target")
-	fn("mouseover")
-	fn("softinteract")
-	fn("focus")
-	if C_NamePlate and C_NamePlate.GetNamePlates then
-		local ok, plates = pcall(C_NamePlate.GetNamePlates)
-		if ok and type(plates) == "table" then
-			for _, plate in pairs(plates) do
-				if plate then
-					local unit
-					pcall(function()
-						unit = plate.namePlateUnitToken or plate.namePlateUnitID
-					end)
-					unit = UsableString(unit)
-					if unit then fn(unit) end
-				end
-			end
-		end
-	end
-	for index = 1, 40 do
-		local plate = _G["NamePlate" .. index]
-		if plate and plate.IsShown and plate:IsShown() then
-			local unit
-			pcall(function()
-				unit = plate.namePlateUnitToken or plate.namePlateUnitID
-			end)
-			unit = UsableString(unit)
-			if unit then fn(unit) end
+local function PrunePeers()
+	local now = Now()
+	for name, peer in pairs(peers) do
+		if now - peer.at > FRESH then
+			peers[name] = nil
 		end
 	end
 end
@@ -420,23 +396,15 @@ local function OnAddon(prefix, text, channel, sender)
 	end
 end
 
-local function Scan()
+local function ScanUnit(unit)
+	if type(unit) ~= "string" or unit == "" or unit:find("nameplate", 1, true) then return end
+	local best = ZoneUID(unit)
+	if not best then return end
 	local zone = ZoneKey()
-	local seen, best, bestCount = {}, nil, 0
-	EachUnit(function(unit)
-		local id = ZoneUID(unit)
-		if not id then return end
-		seen[id] = (seen[id] or 0) + 1
-		if seen[id] > bestCount then
-			best = id
-			bestCount = seen[id]
-		end
-	end)
 	if zone ~= currentZone then
 		currentZone = zone
 		currentId = nil
 	end
-	if not best then return end
 	RememberId(zone, best)
 	if best ~= currentId then
 		currentId = best
@@ -654,7 +622,6 @@ watcher:RegisterEvent("PLAYER_LOGIN")
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
 watcher:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
-watcher:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 watcher:RegisterEvent("CHAT_MSG_ADDON")
 watcher:SetScript("OnEvent", function(_, event, ...)
 	if event == "PLAYER_LOGIN" then
@@ -671,23 +638,33 @@ watcher:SetScript("OnEvent", function(_, event, ...)
 		MakePanel()
 		MakeLabel()
 		EnsureChannel()
-		Scan()
+		ScanUnit("target")
 		return
 	end
 	if event == "CHAT_MSG_ADDON" then
 		OnAddon(...)
 		return
 	end
-	Scan()
-	PaintLabel()
+	if event == "PLAYER_TARGET_CHANGED" then
+		ScanUnit("target")
+		return
+	end
+	if event == "UPDATE_MOUSEOVER_UNIT" then
+		ScanUnit("mouseover")
+		return
+	end
+	ScanUnit("target")
+	ScanUnit("mouseover")
+	ScanUnit("focus")
 end)
 watcher:SetScript("OnUpdate", function(_, delta)
 	elapsed = elapsed + delta
 	announced = announced + delta
-	if elapsed >= 0.5 then
+	if elapsed >= 2 then
 		elapsed = 0
-		Scan()
-		PaintLabel()
+		ScanUnit("target")
+		ScanUnit("mouseover")
+		PrunePeers()
 	end
 	if announced >= 20 then
 		announced = 0
