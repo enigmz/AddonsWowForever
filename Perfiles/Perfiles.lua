@@ -1,5 +1,5 @@
 -- Perfiles de addons: farmeo, JcJ, mazmorras, banda.
--- Cada perfil guarda qué addons están activos y una copia de sus SavedVariables.
+-- Cada perfil guarda qué addons están activos y qué diseño del modo edición usa.
 -- Cambiar de perfil recarga la interfaz. Perfiles no se puede apagar.
 
 local ADDON = "Perfiles"
@@ -238,17 +238,20 @@ end
 local function BindDB()
 	if db then return end
 	local old = _G.PerfilesDB
-	local fresh = {}
-	if type(old) == "table" then
-		if type(old.minimapAngle) == "number" then fresh.minimapAngle = old.minimapAngle end
-		if type(old.point) == "string" then fresh.point = old.point end
-		if type(old.relative) == "string" then fresh.relative = old.relative end
-		if type(old.x) == "number" then fresh.x = old.x end
-		if type(old.y) == "number" then fresh.y = old.y end
+	if type(old) ~= "table" then
+		old = {}
+		_G.PerfilesDB = old
 	end
-	_G.PerfilesDB = fresh
-	PerfilesDB = fresh
-	db = fresh
+	old.chars = nil
+	if type(old.profiles) == "table" then
+		for _, profile in pairs(old.profiles) do
+			if type(profile) == "table" then
+				profile.saved = nil
+			end
+		end
+	end
+	PerfilesDB = old
+	db = old
 end
 
 local function CharDB()
@@ -361,24 +364,159 @@ local function Restore(profile)
 	end
 end
 
+local function PlainLayoutName(name, index)
+	if type(name) == "string" and name ~= "" then
+		local ok, length = pcall(function()
+			return #name
+		end)
+		if ok and type(length) == "number" and length > 0 and length <= 80 then
+			return name
+		end
+	end
+	return "Diseño " .. index
+end
+
+local function LayoutEntries()
+	local entries = {}
+	local manager = _G.EditModeManagerFrame
+	if not manager then
+		local load = (C_AddOns and C_AddOns.LoadAddOn) or LoadAddOn
+		if type(load) == "function" then
+			pcall(load, "Blizzard_EditMode")
+			manager = _G.EditModeManagerFrame
+		end
+	end
+	local layouts
+	local fromManager = false
+	if manager and type(manager.GetLayouts) == "function" then
+		local ok, result = pcall(manager.GetLayouts, manager)
+		if ok and type(result) == "table" and #result > 0 then
+			layouts = result
+			fromManager = true
+		end
+	end
+	if not layouts and C_EditMode and type(C_EditMode.GetLayouts) == "function" then
+		local ok, info = pcall(C_EditMode.GetLayouts)
+		if ok and type(info) == "table" and type(info.layouts) == "table" then
+			layouts = info.layouts
+		end
+	end
+	if type(layouts) ~= "table" then return entries, manager, fromManager end
+	local preset = Enum and Enum.EditModeLayoutType and Enum.EditModeLayoutType.Preset
+	local characterType = Enum and Enum.EditModeLayoutType and Enum.EditModeLayoutType.Character
+	for index = 1, #layouts do
+		local layout = layouts[index]
+		if type(layout) == "table" then
+			local name = PlainLayoutName(layout.layoutName, index)
+			local layoutType = layout.layoutType
+			if type(layoutType) ~= "number" then layoutType = -1 end
+			local suffix = ""
+			if preset and layoutType == preset then
+				suffix = " · predeterminado"
+			elseif characterType and layoutType == characterType then
+				suffix = " · personaje"
+			end
+			entries[#entries + 1] = {
+				index = index,
+				key = layoutType .. "\031" .. name,
+				name = name,
+				label = name .. suffix,
+			}
+		end
+	end
+	return entries, manager, fromManager
+end
+
+local function LayoutIndex(entry, fromManager)
+	if fromManager or type(entry) ~= "table" then return entry and entry.index end
+	local presets = 0
+	local presetManager = _G.EditModePresetLayoutManager
+	if type(presetManager) == "table" and type(presetManager.GetCopyOfPresetLayouts) == "function" then
+		local ok, all = pcall(presetManager.GetCopyOfPresetLayouts, presetManager)
+		if ok and type(all) == "table" then presets = #all end
+	end
+	return presets + entry.index
+end
+
+local function ApplyLayout(profile)
+	if type(profile) ~= "table" or type(profile.layoutKey) ~= "string" or profile.layoutKey == "" then
+		return
+	end
+	local entries, manager, fromManager = LayoutEntries()
+	local found
+	for index = 1, #entries do
+		if entries[index].key == profile.layoutKey then
+			found = entries[index]
+			break
+		end
+	end
+	if not found then
+		Say("No encuentro el diseño de interfaz de este perfil. Los addons sí cambian.")
+		return
+	end
+	local layoutIndex = LayoutIndex(found, fromManager)
+	local applied = false
+	if manager and type(manager.SelectLayout) == "function" and type(layoutIndex) == "number" then
+		applied = pcall(manager.SelectLayout, manager, layoutIndex)
+	end
+	if not applied and C_EditMode and type(C_EditMode.SetActiveLayout) == "function" and type(layoutIndex) == "number" then
+		applied = pcall(C_EditMode.SetActiveLayout, layoutIndex)
+	end
+	if not applied then
+		Say("No he podido cambiar el diseño de interfaz. Los addons sí cambian.")
+	end
+end
+
+local function Reload()
+	if type(ReloadUI) == "function" then
+		ReloadUI()
+		return
+	end
+	if C_UI and type(C_UI.Reload) == "function" then
+		C_UI.Reload()
+	end
+end
+
 local function Apply(name)
 	local char = CharDB()
 	if not char or type(char.profiles[name]) ~= "table" then return end
-	local addons = char.profiles[name].addons or {}
+	local profile = char.profiles[name]
+	local addons = profile.addons or {}
 	for addonName, enabled in pairs(addons) do
 		if addonName ~= ADDON then
 			SetAddonEnabled(addonName, enabled and true or false)
 		end
 	end
 	SetAddonEnabled(ADDON, true)
+	ApplyLayout(profile)
 	char.active = name
 	editing = name
 	Say("Aplicando " .. name .. ". Recargo la interfaz.")
-	if type(ReloadUI) == "function" then
-		ReloadUI()
-	elseif C_UI and type(C_UI.Reload) == "function" then
-		C_UI.Reload()
+	Reload()
+end
+
+local function ApplyPrompt(name)
+	local char = CharDB()
+	local profile = char and char.profiles[name]
+	local layout = profile and profile.layoutName
+	local detail = "Se encienden y apagan sus addons y se recarga la interfaz."
+	if type(layout) == "string" and layout ~= "" then
+		local ok, safe = pcall(function()
+			return layout:gsub("%%", "")
+		end)
+		if ok and type(safe) == "string" and safe ~= "" then
+			detail = "Se encienden y apagan sus addons, se usa el diseño " .. safe .. " y se recarga la interfaz."
+		end
 	end
+	local safeName = name
+	local okName, cleaned = pcall(function()
+		return name:gsub("%%", "")
+	end)
+	if okName and type(cleaned) == "string" and cleaned ~= "" then
+		safeName = cleaned
+	end
+	StaticPopupDialogs.PERFILES_APPLY.text = "Vas a usar el perfil " .. safeName .. ".\n" .. detail
+	StaticPopup_Show("PERFILES_APPLY", nil, nil, name)
 end
 
 local function CreateProfile(text)
@@ -404,7 +542,11 @@ local function CreateProfile(text)
 			addons[addonName] = enabled and true or false
 		end
 	end
-	char.profiles[name] = { addons = addons, saved = {} }
+	char.profiles[name] = { addons = addons }
+	if source and type(source.layoutKey) == "string" and source.layoutKey ~= "" then
+		char.profiles[name].layoutKey = source.layoutKey
+		char.profiles[name].layoutName = source.layoutName
+	end
 	char.order[#char.order + 1] = name
 	editing = name
 	if frame then frame:Show() end
@@ -499,24 +641,30 @@ local function MakeFrame()
 	info:SetPoint("TOPLEFT", 16, -36)
 	info:SetPoint("TOPRIGHT", -36, -36)
 	info:SetJustifyH("LEFT")
-	info:SetHeight(44)
+	info:SetHeight(32)
 	if info.SetSpacing then info:SetSpacing(2) end
-	info:SetText("Cada perfil recuerda qué addons están activos. Aplicar recarga la interfaz.\nLas opciones de cada addon las guarda ese addon. Perfiles se queda siempre activo.")
+	info:SetText("Cada perfil recuerda los addons activos y un diseño del modo edición. Aplicar recarga la interfaz.\nLas opciones de cada addon las guarda ese addon. Perfiles se queda siempre activo.")
+
+	local layoutLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	layoutLabel:SetPoint("TOPLEFT", 200, -72)
+	layoutLabel:SetText("Diseño del modo edición")
+	frame.layoutLabel = layoutLabel
+	frame.layoutRows = {}
 
 	local status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	status:SetPoint("TOPLEFT", 16, -84)
-	status:SetPoint("TOPRIGHT", -16, -84)
+	status:SetPoint("TOPLEFT", 16, -72)
+	status:SetPoint("RIGHT", layoutLabel, "LEFT", -12, 0)
 	status:SetJustifyH("LEFT")
 	status:SetHeight(18)
 	frame.status = status
 
 	local side = frame:CreateTexture(nil, "BACKGROUND")
-	side:SetPoint("TOPLEFT", 12, -108)
-	side:SetSize(176, 400)
+	side:SetPoint("TOPLEFT", 12, -96)
+	side:SetSize(176, 408)
 	side:SetColorTexture(0.09, 0.09, 0.12, 1)
 
 	local scroll = CreateFrame("ScrollFrame", nil, frame)
-	scroll:SetPoint("TOPLEFT", 200, -140)
+	scroll:SetPoint("TOPLEFT", 200, -220)
 	scroll:SetPoint("BOTTOMRIGHT", -28, 64)
 	scroll:EnableMouseWheel(true)
 	local child = CreateFrame("Frame", nil, scroll)
@@ -527,7 +675,7 @@ local function MakeFrame()
 
 	local slider = CreateFrame("Slider", nil, frame)
 	slider:SetOrientation("VERTICAL")
-	slider:SetPoint("TOPRIGHT", -10, -140)
+	slider:SetPoint("TOPRIGHT", -10, -220)
 	slider:SetPoint("BOTTOMRIGHT", -10, 64)
 	slider:SetWidth(12)
 	slider:SetMinMaxValues(0, 1)
@@ -550,7 +698,10 @@ local function MakeFrame()
 		scrolling = false
 	end
 	slider:SetScript("OnValueChanged", function(_, value)
-		SetScroll(value or 0)
+		if not frame:IsShown() then return end
+		local offset = SafeNumber(value)
+		if not offset then return end
+		SetScroll(offset)
 	end)
 	local function OnWheel(_, delta)
 		SetScroll(scroll:GetVerticalScroll() - delta * 36)
@@ -563,7 +714,8 @@ local function MakeFrame()
 
 	local search = CreateFrame("EditBox", "PerfilesSearchBox", frame, "InputBoxTemplate")
 	search:SetSize(220, 20)
-	search:SetPoint("TOPLEFT", 208, -110)
+	search:SetPoint("TOPLEFT", 208, -190)
+	frame.search = search
 	search:SetAutoFocus(false)
 	search:SetMaxLetters(40)
 	search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -602,8 +754,7 @@ local function MakeFrame()
 	applyButton:SetScript("OnClick", function()
 		local name = EditingName()
 		if not name then return end
-		StaticPopupDialogs.PERFILES_APPLY.text = "Vas a usar el perfil " .. name .. ".\nSe encienden y apagan sus addons y se recarga la interfaz."
-		StaticPopup_Show("PERFILES_APPLY", nil, nil, name)
+		ApplyPrompt(name)
 	end)
 
 	local newButton = CreateFrame("Button", "PerfilesNewButton", frame, "UIPanelButtonTemplate")
@@ -629,7 +780,7 @@ local function MakeFrame()
 	hint:SetPoint("BOTTOMLEFT", 16, 8)
 	hint:SetPoint("BOTTOMRIGHT", -16, 8)
 	hint:SetJustifyH("LEFT")
-	hint:SetText("El perfil solo enciende y apaga addons. No copia sus opciones al salir del juego.")
+	hint:SetText("El diseño del modo edición se aplica junto con los addons, al recargar.")
 
 	frame.ready = false
 	frame:SetScript("OnShow", function(self)
@@ -639,6 +790,7 @@ local function MakeFrame()
 	frame:SetScript("OnHide", function(self)
 		if self.ready and db then db.open = false end
 	end)
+
 	frame:Hide()
 	frame.ready = true
 end
@@ -676,7 +828,7 @@ Refresh = function()
 		end
 		local profileName = char.order[index]
 		button.profileName = profileName
-		button:SetPoint("TOPLEFT", 18, -114 - (index - 1) * 28)
+		button:SetPoint("TOPLEFT", 18, -102 - (index - 1) * 28)
 		local suffix = ""
 		if profileName == char.active then suffix = "  · en uso" end
 		button.label:SetText(profileName .. suffix)
@@ -694,6 +846,78 @@ Refresh = function()
 	end
 
 	local profile = char.profiles[selected]
+	local entries = LayoutEntries()
+	local choices = {
+		{ key = "", name = nil, label = "No cambiar la interfaz" },
+	}
+	for index = 1, #entries do
+		choices[#choices + 1] = entries[index]
+	end
+	if #entries == 0 then
+		choices[#choices + 1] = { key = "", name = nil, label = "Sin diseños de modo edición", disabled = true }
+	end
+	local selectedKey = profile and profile.layoutKey or ""
+	if type(selectedKey) ~= "string" then selectedKey = "" end
+	for index = 1, #choices do
+		local button = frame.layoutRows[index]
+		if not button then
+			button = CreateFrame("Button", nil, frame)
+			button:SetSize(490, 22)
+			local buttonBg = button:CreateTexture(nil, "BACKGROUND")
+			buttonBg:SetAllPoints()
+			buttonBg:SetColorTexture(0.16, 0.16, 0.2, 1)
+			local label = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			label:SetPoint("LEFT", 8, 0)
+			label:SetPoint("RIGHT", -8, 0)
+			label:SetJustifyH("LEFT")
+			button.bg = buttonBg
+			button.label = label
+			button:SetScript("OnClick", function(self)
+				if self.disabled then return end
+				local current = CharDB()
+				local profileName = EditingName()
+				local target = current and profileName and current.profiles[profileName]
+				if not target then return end
+				if type(self.layoutKey) == "string" and self.layoutKey ~= "" then
+					target.layoutKey = self.layoutKey
+					target.layoutName = self.layoutName
+				else
+					target.layoutKey = nil
+					target.layoutName = nil
+				end
+				Refresh()
+			end)
+			frame.layoutRows[index] = button
+		end
+		local choice = choices[index]
+		button.layoutKey = choice.key
+		button.layoutName = choice.name
+		button.disabled = choice.disabled
+		button.label:SetText(choice.label)
+		button:SetPoint("TOPLEFT", 200, -94 - (index - 1) * 24)
+		if choice.disabled then
+			button.bg:SetColorTexture(0.12, 0.12, 0.12, 1)
+		elseif choice.key == selectedKey and not (choice.key == "" and choice.disabled) then
+			button.bg:SetColorTexture(0.35, 0.28, 0.1, 1)
+		else
+			button.bg:SetColorTexture(0.16, 0.16, 0.2, 1)
+		end
+		button:Show()
+	end
+	for index = #choices + 1, #frame.layoutRows do
+		frame.layoutRows[index]:Hide()
+	end
+	local below = 94 + #choices * 24 + 10
+	if frame.search then
+		frame.search:ClearAllPoints()
+		frame.search:SetPoint("TOPLEFT", 208, -below)
+	end
+	frame.scroll:ClearAllPoints()
+	frame.scroll:SetPoint("TOPLEFT", 200, -(below + 28))
+	frame.scroll:SetPoint("BOTTOMRIGHT", -28, 64)
+	frame.slider:ClearAllPoints()
+	frame.slider:SetPoint("TOPRIGHT", -10, -(below + 28))
+	frame.slider:SetPoint("BOTTOMRIGHT", -10, 64)
 	local list = AddonList()
 	local shown = 0
 	for index = 1, #list do
@@ -782,11 +1006,11 @@ local function PlaceMinimapButton(button, angle)
 end
 
 local function EnsureMinimapButton()
-	if _G.PerfilesMinimapButton or not Minimap or not db then return end
-	local button = CreateFrame("Button", "PerfilesMinimapButton", Minimap)
+	if not Minimap or not db then return end
+	local button = _G.PerfilesMinimapButton
+	if not button then
+	button = CreateFrame("Button", "PerfilesMinimapButton", Minimap)
 	button:SetSize(31, 31)
-	button:SetFrameStrata("MEDIUM")
-	button:SetFrameLevel((Minimap:GetFrameLevel() or 1) + 12)
 	button:RegisterForClicks("LeftButtonUp")
 	button:RegisterForDrag("LeftButton")
 	button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
@@ -801,9 +1025,6 @@ local function EnsureMinimapButton()
 	icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
 	icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	icon:SetPoint("CENTER", 1, 0)
-
-	local angle = tonumber(db.minimapAngle) or 125
-	PlaceMinimapButton(button, angle)
 
 	local downX, downY
 	button:SetScript("OnMouseDown", function(_, mouseButton)
@@ -847,6 +1068,12 @@ local function EnsureMinimapButton()
 	button:SetScript("OnLeave", function()
 		GameTooltip:Hide()
 	end)
+	end
+	button:SetParent(Minimap)
+	button:SetFrameStrata("HIGH")
+	button:SetFrameLevel((Minimap:GetFrameLevel() or 1) + 25)
+	button:Show()
+	PlaceMinimapButton(button, tonumber(db.minimapAngle) or 125)
 end
 
 local function FindProfile(text)
@@ -869,8 +1096,7 @@ SlashCmdList.PERFILES = function(message)
 	if profileName then
 		editing = profileName
 		if frame then frame:Show() end
-		StaticPopupDialogs.PERFILES_APPLY.text = "Vas a usar el perfil " .. profileName .. ".\nSe encienden y apagan sus addons y se recarga la interfaz."
-		StaticPopup_Show("PERFILES_APPLY", nil, nil, profileName)
+		ApplyPrompt(profileName)
 		return
 	end
 	Toggle()
@@ -944,12 +1170,15 @@ local function Startup()
 	if not frame then MakeFrame() end
 	EnsureMinimapButton()
 	if created then
-		Say("Perfiles 1.0.1 cargado. He creado Farmeo, JcJ, Mazmorras y Banda con los addons que tienes ahora. Quita los que no quieras en cada uno y pulsa Aplicar.")
+		Say("Perfiles 1.0.7 cargado. He creado Farmeo, JcJ, Mazmorras y Banda con los addons que tienes ahora. Quita los que no quieras en cada uno y pulsa Aplicar.")
 	else
 		local char = CharDB()
-		Say("Perfiles 1.0.1 cargado. En uso: " .. (char and char.active or "Farmeo") .. ". El botón del minimapa abre el menú.")
+		Say("Perfiles 1.0.7 cargado. En uso: " .. (char and char.active or "Farmeo") .. ". El libro del minimapa abre el menú.")
 	end
 	if db.open and frame then frame:Show() end
+	if C_Timer and C_Timer.After then
+		C_Timer.After(1, EnsureMinimapButton)
+	end
 end
 
 local watcher = CreateFrame("Frame")

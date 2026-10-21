@@ -4,7 +4,7 @@
 ## Notes-esES: Activa un grupo de addons según el perfil elegido.
 ## Notes-esMX: Activa un grupo de addons según el perfil elegido.
 ## Author: Adiction
-## Version: 1.0.1
+## Version: 1.0.7
 ## SavedVariables: PerfilesDB
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 
