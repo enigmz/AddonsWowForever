@@ -96,40 +96,24 @@ local function AsEnabled(state)
 end
 
 local function AddonIsEnabled(name)
-	local character = ShortName()
-	local function Read(fn, a, b)
-		if type(fn) ~= "function" then return nil end
-		local ok, state = pcall(fn, a, b)
+	if C_AddOns and C_AddOns.GetAddOnEnableState then
+		local ok, state = pcall(C_AddOns.GetAddOnEnableState, name)
 		if ok and (type(state) == "number" or type(state) == "boolean") then
-			return state
-		end
-	end
-	if type(character) == "string" then
-		if C_AddOns and C_AddOns.GetAddOnEnableState then
-			local state = Read(C_AddOns.GetAddOnEnableState, name, character)
-			if state ~= nil then return AsEnabled(state) end
-		elseif GetAddOnEnableState then
-			local state = Read(GetAddOnEnableState, character, name)
-			if state ~= nil then return AsEnabled(state) end
+			return AsEnabled(state)
 		end
 	end
 	return true
 end
 
 local function SetAddonEnabled(name, enabled)
-	local character = ShortName()
-	local full = CharacterKey()
 	local fn
 	if enabled then
 		fn = (C_AddOns and C_AddOns.EnableAddOn) or EnableAddOn
 	else
 		fn = (C_AddOns and C_AddOns.DisableAddOn) or DisableAddOn
 	end
-	if type(fn) ~= "function" or type(character) ~= "string" then return end
-	if pcall(fn, name, character) then return end
-	if type(full) == "string" and full ~= character then
-		pcall(fn, name, full)
-	end
+	if type(fn) ~= "function" then return end
+	pcall(fn, name)
 end
 
 local function AddonList()
@@ -252,43 +236,39 @@ local function CurrentAddonMap()
 end
 
 local function BindDB()
-	if type(_G.PerfilesDB) == "table" then
-		PerfilesDB = _G.PerfilesDB
-	elseif type(PerfilesDB) == "table" then
-		_G.PerfilesDB = PerfilesDB
-	else
-		_G.PerfilesDB = {}
-		PerfilesDB = _G.PerfilesDB
+	if db then return end
+	local old = _G.PerfilesDB
+	local fresh = {}
+	if type(old) == "table" then
+		if type(old.minimapAngle) == "number" then fresh.minimapAngle = old.minimapAngle end
+		if type(old.point) == "string" then fresh.point = old.point end
+		if type(old.relative) == "string" then fresh.relative = old.relative end
+		if type(old.x) == "number" then fresh.x = old.x end
+		if type(old.y) == "number" then fresh.y = old.y end
 	end
-	db = PerfilesDB
-	db.chars = db.chars or {}
+	_G.PerfilesDB = fresh
+	PerfilesDB = fresh
+	db = fresh
 end
 
 local function CharDB()
 	BindDB()
-	local key = CharacterKey()
-	if not key then return nil end
-	local char = db.chars[key]
+	db.profiles = db.profiles or {}
+	db.order = db.order or {}
 	local created = false
-	if type(char) ~= "table" then
-		char = { active = DEFAULTS[1], order = {}, profiles = {} }
-		db.chars[key] = char
-	end
-	char.profiles = char.profiles or {}
-	char.order = char.order or {}
 	local kept = {}
 	local order = {}
-	for index = 1, #char.order do
-		local profileName = char.order[index]
-		if type(profileName) == "string" and type(char.profiles[profileName]) == "table" and not kept[profileName] then
+	for index = 1, #db.order do
+		local profileName = db.order[index]
+		if type(profileName) == "string" and type(db.profiles[profileName]) == "table" and not kept[profileName] then
 			kept[profileName] = true
 			order[#order + 1] = profileName
-			char.profiles[profileName].addons = char.profiles[profileName].addons or {}
-			char.profiles[profileName].saved = char.profiles[profileName].saved or {}
+			db.profiles[profileName].addons = db.profiles[profileName].addons or {}
+			db.profiles[profileName].saved = nil
 		end
 	end
-	char.order = order
-	if #char.order == 0 then
+	db.order = order
+	if #db.order == 0 then
 		created = true
 		local map = CurrentAddonMap()
 		for index = 1, #DEFAULTS do
@@ -297,15 +277,15 @@ local function CharDB()
 			for addonName, enabled in pairs(map) do
 				addons[addonName] = enabled and true or false
 			end
-			char.profiles[profileName] = { addons = addons, saved = {} }
-			char.order[#char.order + 1] = profileName
+			db.profiles[profileName] = { addons = addons }
+			db.order[#db.order + 1] = profileName
 		end
-		char.active = DEFAULTS[1]
+		db.active = DEFAULTS[1]
 	end
-	if type(char.profiles[char.active]) ~= "table" then
-		char.active = char.order[1]
+	if type(db.profiles[db.active]) ~= "table" then
+		db.active = db.order[1]
 	end
-	return char, created
+	return db, created
 end
 
 local function EditingName()
@@ -384,14 +364,6 @@ end
 local function Apply(name)
 	local char = CharDB()
 	if not char or type(char.profiles[name]) ~= "table" then return end
-	local previous = char.profiles[char.active]
-	local target = char.profiles[name]
-	if previous then
-		Snapshot(previous, true)
-	end
-	if previous ~= target then
-		Restore(target)
-	end
 	local addons = char.profiles[name].addons or {}
 	for addonName, enabled in pairs(addons) do
 		if addonName ~= ADDON then
@@ -529,7 +501,7 @@ local function MakeFrame()
 	info:SetJustifyH("LEFT")
 	info:SetHeight(44)
 	if info.SetSpacing then info:SetSpacing(2) end
-	info:SetText("Cada perfil recuerda los addons activos y una copia de sus opciones. Aplicar recarga la interfaz.\nLas opciones guardadas por cuenta cambian en todos tus personajes. Perfiles se queda siempre activo.")
+	info:SetText("Cada perfil recuerda qué addons están activos. Aplicar recarga la interfaz.\nLas opciones de cada addon las guarda ese addon. Perfiles se queda siempre activo.")
 
 	local status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	status:SetPoint("TOPLEFT", 16, -84)
@@ -630,24 +602,13 @@ local function MakeFrame()
 	applyButton:SetScript("OnClick", function()
 		local name = EditingName()
 		if not name then return end
-		StaticPopupDialogs.PERFILES_APPLY.text = "Vas a usar el perfil " .. name .. ".\nSe guardan las opciones del perfil en uso, se restauran las de este y se recarga la interfaz."
+		StaticPopupDialogs.PERFILES_APPLY.text = "Vas a usar el perfil " .. name .. ".\nSe encienden y apagan sus addons y se recarga la interfaz."
 		StaticPopup_Show("PERFILES_APPLY", nil, nil, name)
-	end)
-
-	local saveButton = CreateFrame("Button", "PerfilesSaveButton", frame, "UIPanelButtonTemplate")
-	saveButton:SetSize(150, 24)
-	saveButton:SetPoint("LEFT", applyButton, "RIGHT", 8, 0)
-	saveButton:SetText("Guardar opciones")
-	saveButton:SetScript("OnClick", function()
-		local char = CharDB()
-		if not char then return end
-		Snapshot(char.profiles[char.active], true)
-		Say("Opciones guardadas en " .. char.active .. ".")
 	end)
 
 	local newButton = CreateFrame("Button", "PerfilesNewButton", frame, "UIPanelButtonTemplate")
 	newButton:SetSize(110, 24)
-	newButton:SetPoint("LEFT", saveButton, "RIGHT", 8, 0)
+	newButton:SetPoint("LEFT", applyButton, "RIGHT", 8, 0)
 	newButton:SetText("Nuevo perfil")
 	newButton:SetScript("OnClick", function()
 		StaticPopup_Show("PERFILES_NEW")
@@ -668,7 +629,7 @@ local function MakeFrame()
 	hint:SetPoint("BOTTOMLEFT", 16, 8)
 	hint:SetPoint("BOTTOMRIGHT", -16, 8)
 	hint:SetJustifyH("LEFT")
-	hint:SetText("Guardar opciones copia la configuración actual en el perfil que está en uso, no en el que estás editando.")
+	hint:SetText("El perfil solo enciende y apaga addons. No copia sus opciones al salir del juego.")
 
 	frame.ready = false
 	frame:SetScript("OnShow", function(self)
@@ -908,7 +869,7 @@ SlashCmdList.PERFILES = function(message)
 	if profileName then
 		editing = profileName
 		if frame then frame:Show() end
-		StaticPopupDialogs.PERFILES_APPLY.text = "Vas a usar el perfil " .. profileName .. ".\nSe guardan las opciones del perfil en uso, se restauran las de este y se recarga la interfaz."
+		StaticPopupDialogs.PERFILES_APPLY.text = "Vas a usar el perfil " .. profileName .. ".\nSe encienden y apagan sus addons y se recarga la interfaz."
 		StaticPopup_Show("PERFILES_APPLY", nil, nil, profileName)
 		return
 	end
@@ -972,31 +933,21 @@ StaticPopupDialogs.PERFILES_DELETE = {
 	preferredIndex = 3,
 }
 
-local function Startup(event)
-	if event == "PLAYER_LOGOUT" then
-		if started then
-			pcall(function()
-				local char = CharDB()
-				if char then Snapshot(char.profiles[char.active], false) end
-			end)
-		end
-		return
-	end
+local function Startup()
 	if started then
 		EnsureMinimapButton()
 		return
 	end
-	if not CharacterKey() then return end
 	started = true
 	BindDB()
 	local _, created = CharDB()
 	if not frame then MakeFrame() end
 	EnsureMinimapButton()
 	if created then
-		Say("Perfiles 1.0.0 cargado. He creado Farmeo, JcJ, Mazmorras y Banda con los addons que tienes ahora. Quita los que no quieras en cada uno y pulsa Aplicar.")
+		Say("Perfiles 1.0.1 cargado. He creado Farmeo, JcJ, Mazmorras y Banda con los addons que tienes ahora. Quita los que no quieras en cada uno y pulsa Aplicar.")
 	else
 		local char = CharDB()
-		Say("Perfiles 1.0.0 cargado. En uso: " .. (char and char.active or "Farmeo") .. ". El botón del minimapa abre el menú.")
+		Say("Perfiles 1.0.1 cargado. En uso: " .. (char and char.active or "Farmeo") .. ". El botón del minimapa abre el menú.")
 	end
 	if db.open and frame then frame:Show() end
 end
@@ -1004,5 +955,4 @@ end
 local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("PLAYER_LOGIN")
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-watcher:RegisterEvent("PLAYER_LOGOUT")
 watcher:SetScript("OnEvent", Startup)

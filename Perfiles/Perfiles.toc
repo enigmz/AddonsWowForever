@@ -1,10 +1,10 @@
 ## Interface: 16001
 ## Title: Perfiles
-## Notes: Activa un grupo de addons y restaura sus opciones.
-## Notes-esES: Activa un grupo de addons y restaura sus opciones.
-## Notes-esMX: Activa un grupo de addons y restaura sus opciones.
+## Notes: Activa un grupo de addons según el perfil elegido.
+## Notes-esES: Activa un grupo de addons según el perfil elegido.
+## Notes-esMX: Activa un grupo de addons según el perfil elegido.
 ## Author: Adiction
-## Version: 1.0.0
+## Version: 1.0.1
 ## SavedVariables: PerfilesDB
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 
