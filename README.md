@@ -91,3 +91,17 @@ Marca en el mapa dónde apuntarte a cada campo de batalla de Forever. Solo muest
 - Al elegir un campo, el mapa se abre en el primer punto y salen botones para la entrada y para cada ciudad. El pin solo se ve en el mapa de esa zona. Al pasar el ratón dice con quién hablar. Cerrar la ventana no quita las marcas.
 
 Variables guardadas: `PvPDB`.
+
+## Perfiles 1.0.0
+
+Cambia de un grupo de addons a otro y guarda las opciones de cada uno. La primera vez crea cuatro perfiles con los addons que tengas activos: Farmeo, JcJ, Mazmorras y Banda.
+
+- El botón del minimapa abre la ventana. También `/perfiles` o `/perfil`. Se puede arrastrar, y el botón se mueve alrededor del minimapa. Escape la cierra.
+- Elige un perfil, marca o desmarca sus addons y pulsa Aplicar y recargar. El juego recarga la interfaz. Perfiles se queda siempre activo.
+- Al aplicar, guarda las opciones del perfil que estaba en uso y restaura las del elegido. Guardar opciones hace solo esa copia, sin cambiar de perfil. Al salir del personaje también se guardan.
+- Nuevo perfil pide un nombre de hasta 24 letras y lo crea con los addons del que está en uso. Puedes tener hasta 12. Borrar perfil elimina el seleccionado; tiene que quedar al menos uno. Si borras el que está en uso, los addons no cambian hasta que apliques otro.
+- `/perfiles mazmorras` (o el nombre de otro) pregunta si quieres aplicarlo.
+- Todos y Ninguno marcan o vacían la lista. El buscador filtra por nombre.
+- Las opciones que un addon guarda por cuenta valen para todos tus personajes. Las que guarda por personaje solo cambian en este. Si una configuración es demasiado grande, se queda como está y el chat avisa.
+
+Variables guardadas: `PerfilesDB`.
